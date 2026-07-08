@@ -1,0 +1,100 @@
+ESTRUCTURA SUGERIDA - LOGIN / REGISTER / RECUPERAR CONTRASEÑA + NAV PERSISTENTE
+================================================================================
+
+CONCEPTO CLAVE:
+----------------
+Lo que buscas (header/footer fijo mientras el contenido cambia) en Flutter
+se llama "SHELL" o "layout persistente". Se logra con un widget que envuelve
+el contenido y mantiene la barra de navegación inferior fija, mientras el
+"body" central cambia según la pestaña seleccionada.
+
+IMPORTANTE: Login, Register y Recuperar Contraseña normalmente NO llevan la
+barra de navegación inferior (son pantallas previas al login). El "shell"
+con nav bar aplica después de que el usuario inicia sesión (Home, Perfil, etc).
+Si quieres, puedes compartir solo un header simple (logo/título) en las
+pantallas de auth usando el mismo widget reutilizable.
+
+
+ÁRBOL DE CARPETAS
+------------------
+
+lib/
+│
+├── core/
+│   ├── constants/
+│   │   └── app_colors.dart              -> colores, tamaños, textos fijos
+│   │
+│   ├── theme/
+│   │   └── app_theme.dart               -> tema general de la app (ThemeData)
+│   │
+│   ├── widgets/
+│   │   ├── app_header.dart              -> header reutilizable (logo/título)
+│   │   └── app_bottom_nav.dart          -> la barra de navegación inferior
+│   │
+│   ├── navigation/
+│   │   ├── app_shell.dart               -> el "esqueleto": header/footer fijos
+│   │   │                                    + contenido que cambia (IndexedStack
+│   │   │                                    o StatefulShellRoute de go_router)
+│   │   └── app_router.dart              -> configuración de rutas de toda la app
+│   │
+│   └── utils/
+│       └── validators.dart              -> validar email, password, etc.
+│
+├── features/
+│   ├── auth/
+│   │   ├── login/
+│   │   │   └── login_screen.dart
+│   │   │
+│   │   ├── register/
+│   │   │   └── register_screen.dart
+│   │   │
+│   │   └── recover_password/
+│   │       └── recover_password_screen.dart
+│   │
+│   └── home/                             -> (ejemplo) pantallas post-login
+│       ├── home_screen.dart
+│       └── profile_screen.dart
+│
+├── models/
+│   ├── user_model.dart                   -> clase User (id, nombre, email...)
+│   └── auth_response_model.dart          -> respuesta del login/register (token, etc.)
+│
+├── providers/
+│   ├── auth_provider.dart                -> estado: logueado, cargando, error
+│   └── navigation_provider.dart          -> guarda qué pestaña está activa
+│
+├── repositories/
+│   └── auth_repository.dart              -> llamadas API: login(), register(),
+│                                             recoverPassword()
+│
+└── main.dart                             -> punto de entrada, arma el MaterialApp
+
+
+NOTAS RÁPIDAS
+--------------
+1. Cada pantalla de auth (login, register, recover) es un archivo separado,
+   cada una en su propia subcarpeta dentro de features/auth/.
+
+2. Si más adelante login/register comparten piezas visuales (ej: un mismo
+   campo de texto con validación, un mismo botón), esas piezas van en:
+   features/auth/widgets/  (crea esa carpeta cuando la necesites)
+
+3. app_shell.dart es la pieza que resuelve tu pregunta del "header/footer
+   fijo mientras el contenido cambia". Ejemplo conceptual de cómo se ve por
+   dentro (pseudo-código):
+
+     Scaffold(
+       appBar: AppHeader(),              // fijo arriba
+       body: IndexedStack(                // cambia según la pestaña
+         index: selectedIndex,
+         children: [HomeScreen(), ProfileScreen(), ...],
+       ),
+       bottomNavigationBar: AppBottomNav( // fijo abajo
+         currentIndex: selectedIndex,
+         onTap: (i) => cambiarPestaña(i),
+       ),
+     )
+
+4. Este árbol es una guía, no una regla estricta. Si tu equipo ya tiene
+   convenciones distintas dentro de esas carpetas, sigue lo que ya exista
+   para mantener consistencia con lo que hicieron tus compañeros.
