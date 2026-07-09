@@ -1,11 +1,17 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-/// Fondo degradado con "blobs" difuminados detrás del contenido.
-/// Es lo que le da el efecto "liquid glass" al combinarse con GlassCard.
+import '../../../core/theme/app_theme.dart';
+
+/// -----------------------------------------------------------------------
+/// FONDO
+/// Antes tenía "blobs" de color con blur difuso. Ahora es un degradado
+/// limpio con un par de formas geométricas sólidas de bajo contraste,
+/// SIN blur, para que se vea nítido en cualquier pantalla.
+/// -----------------------------------------------------------------------
+///
 class AuthBackground extends StatelessWidget {
   final Widget child;
-
   const AuthBackground({super.key, required this.child});
 
   @override
@@ -13,53 +19,90 @@ class AuthBackground extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFEFF3FF), Color(0xFFF7F5FF), Color(0xFFFFFFFF)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFEFF3FF), AppColors.background],
         ),
       ),
       child: Stack(
         children: [
-          _blob(top: -60, left: -40, color: const Color(0xFF2E5BFF), size: 220),
-          _blob(
-            top: 140,
-            right: -80,
-            color: const Color(0xFF8B5CF6),
-            size: 260,
+          Positioned(
+            top: -70,
+            right: -60,
+            child: _Shape(
+              color: AppColors.primary.withValues(alpha: 0.07),
+              size: 180,
+            ),
           ),
-          _blob(
-            bottom: -80,
-            left: -60,
-            color: const Color(0xFF2E5BFF),
-            size: 240,
+          Positioned(
+            bottom: -90,
+            left: -70,
+            child: _Shape(
+              color: AppColors.secondary.withValues(alpha: 0.07),
+              size: 220,
+            ),
           ),
           child,
         ],
       ),
     );
   }
+}
 
-  Widget _blob({
-    double? top,
-    double? bottom,
-    double? left,
-    double? right,
-    required Color color,
-    required double size,
-  }) {
-    return Positioned(
-      top: top,
-      bottom: bottom,
-      left: left,
-      right: right,
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: 0.28),
+class _Shape extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _Shape({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+/// -----------------------------------------------------------------------
+/// SCAFFOLD RESPONSIVO PARA PANTALLAS DE AUTH
+/// Soluciona el "queda cortado" en celulares chicos: usa scroll,
+/// altura mínima adaptada, y limita el ancho máximo en pantallas grandes
+/// (tablets) para que no se vea estirado feo.
+/// -----------------------------------------------------------------------
+class AuthScaffold extends StatelessWidget {
+  final Widget child;
+  const AuthScaffold({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = Responsive(context);
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      body: AuthBackground(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsive.horizontalPadding,
+                  vertical: AppSpacing.xl,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - AppSpacing.xl * 2,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -67,37 +110,38 @@ class AuthBackground extends StatelessWidget {
   }
 }
 
-/// Tarjeta "vidrio esmerilado": blur real detrás + fondo blanco translúcido.
+/// -----------------------------------------------------------------------
+/// TARJETA "LIQUID GLASS"
+/// Aquí SÍ se mantiene el efecto de vidrio esmerilado (BackdropFilter),
+/// porque es lo que da la identidad "liquid glass". La diferencia es que
+/// ya no flota sobre blobs de colores difuminados, sino sobre un fondo
+/// limpio, así se ve nítido y no "sucio".
+/// -----------------------------------------------------------------------
 class GlassCard extends StatelessWidget {
   final Widget child;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
 
-  const GlassCard({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(24),
-  });
+  const GlassCard({super.key, required this.child, this.padding});
 
   @override
   Widget build(BuildContext context) {
+    final resolvedPadding =
+        padding ?? EdgeInsets.all(Responsive(context).cardPadding);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          padding: padding,
+          padding: resolvedPadding,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.6),
-              width: 1.2,
-            ),
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+            border: Border.all(color: AppColors.border, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -108,7 +152,7 @@ class GlassCard extends StatelessWidget {
   }
 }
 
-/// Campo de texto estilizado a juego con el fondo de vidrio.
+/// Campo de texto estilizado, consistente en las 3 pantallas de auth.
 class GlassTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
@@ -141,10 +185,10 @@ class GlassTextField extends StatelessWidget {
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         TextFormField(
           controller: controller,
           obscureText: obscureText,
@@ -153,35 +197,33 @@ class GlassTextField extends StatelessWidget {
           style: const TextStyle(fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.black.withValues(alpha: 0.35)),
-            prefixIcon: Icon(icon, size: 20, color: Colors.black54),
+            hintStyle: const TextStyle(color: Color(0xFFB0B6C3)),
+            prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.5),
+            fillColor: AppColors.fieldFill,
             contentPadding: const EdgeInsets.symmetric(
               vertical: 14,
               horizontal: 12,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.6),
-              ),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               borderSide: const BorderSide(
-                color: Color(0xFF2E5BFF),
-                width: 1.5,
+                color: AppColors.primary,
+                width: 1.6,
               ),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Colors.redAccent),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderSide: const BorderSide(color: AppColors.error),
             ),
           ),
         ),
@@ -190,8 +232,8 @@ class GlassTextField extends StatelessWidget {
   }
 }
 
-/// Botón principal azul con degradado, usado en las 3 pantallas de auth.
-class PrimaryGlassButton extends StatelessWidget {
+/// Botón principal con animación sutil de "presión" al tocarlo.
+class PrimaryGlassButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool isLoading;
@@ -204,31 +246,48 @@ class PrimaryGlassButton extends StatelessWidget {
   });
 
   @override
+  State<PrimaryGlassButton> createState() => _PrimaryGlassButtonState();
+}
+
+class _PrimaryGlassButtonState extends State<PrimaryGlassButton> {
+  double _scale = 1;
+
+  bool get _disabled => widget.isLoading || widget.onPressed == null;
+
+  void _setScale(double value) => setState(() => _scale = value);
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2E5BFF), Color(0xFF5B7CFF)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2E5BFF).withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+    return GestureDetector(
+      onTapDown: _disabled ? null : (_) => _setScale(0.97),
+      onTapUp: _disabled ? null : (_) => _setScale(1),
+      onTapCancel: _disabled ? null : () => _setScale(1),
+      onTap: _disabled ? null : widget.onPressed,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryLight],
+              ),
+              boxShadow: _disabled
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
             ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: isLoading ? null : onPressed,
             child: Center(
-              child: isLoading
+              child: widget.isLoading
                   ? const SizedBox(
                       width: 22,
                       height: 22,
@@ -238,7 +297,7 @@ class PrimaryGlassButton extends StatelessWidget {
                       ),
                     )
                   : Text(
-                      label,
+                      widget.label,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -248,6 +307,136 @@ class PrimaryGlassButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Animación de entrada (fade + slide hacia arriba) para las tarjetas.
+/// Úsala envolviendo el contenido principal de cada pantalla.
+class FadeSlideIn extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+
+  const FadeSlideIn({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+  });
+
+  @override
+  State<FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
+
+/// Animación de "éxito": círculo verde con check que aparece con un
+/// efecto elástico. Úsala tras un registro o una acción exitosa.
+class SuccessCheckAnimation extends StatefulWidget {
+  final String title;
+  final String message;
+
+  const SuccessCheckAnimation({
+    super.key,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  State<SuccessCheckAnimation> createState() => _SuccessCheckAnimationState();
+}
+
+class _SuccessCheckAnimationState extends State<SuccessCheckAnimation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _scale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ScaleTransition(
+            scale: _scale,
+            child: Container(
+              width: 76,
+              height: 76,
+              decoration: const BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 40),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            widget.title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            widget.message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
+          ),
+        ],
       ),
     );
   }
