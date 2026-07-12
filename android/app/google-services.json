@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "363217250002",
+    "project_id": "martekunap",
+    "storage_bucket": "martekunap.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363217250002:android:f53a1e7a5fb0c1c3ee2f0b",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdRgK26rFxqZdBJVe2UVF_B1uht31823k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

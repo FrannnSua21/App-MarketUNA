@@ -1,19 +1,32 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/services/firestore_service.dart'; // ajusta la ruta real
 import 'models/profile_models.dart';
 import 'widgets/profile_widgets.dart';
 
 const _months = [
-  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
 ];
 
-String _formatDate(DateTime date) => '${date.day} ${_months[date.month - 1]} ${date.year}';
+String _formatDate(DateTime date) =>
+    '${date.day} ${_months[date.month - 1]} ${date.year}';
 
 /// -----------------------------------------------------------------------
-/// HISTORIAL DE COMPRAS Y VENTAS
+/// HISTORIAL DE COMPRAS Y VENTAS (datos reales de Firestore)
 /// -----------------------------------------------------------------------
 class ProfileHistoryPage extends StatefulWidget {
   const ProfileHistoryPage({super.key});
@@ -26,6 +39,8 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
   final _searchCtrl = TextEditingController();
   String _query = '';
 
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -35,6 +50,11 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
   @override
   Widget build(BuildContext context) {
     final responsive = Responsive(context);
+    final uid = _uid;
+
+    if (uid == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return DefaultTabController(
       length: 2,
@@ -46,63 +66,92 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
         ),
         body: SafeArea(
           top: false,
-          child: Column(
-            children: [
-              Container(
-                color: Colors.white,
-                padding: EdgeInsets.fromLTRB(
-                  responsive.horizontalPadding,
-                  AppSpacing.sm,
-                  responsive.horizontalPadding,
-                  0,
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
-                  decoration: InputDecoration(
-                    hintText: 'Buscar por producto o persona…',
-                    hintStyle: const TextStyle(fontSize: 13.5),
-                    prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-                    filled: true,
-                    fillColor: AppColors.background,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      borderSide: BorderSide.none,
+          child: StreamBuilder<List<ProfileTransaction>>(
+            stream: FirestoreService.watchUserTransactions(uid),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(child: Text('Error: ${snap.error}'));
+              }
+              final all = snap.data ?? [];
+
+              return Column(
+                children: [
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.fromLTRB(
+                      responsive.horizontalPadding,
+                      AppSpacing.sm,
+                      responsive.horizontalPadding,
+                      0,
+                    ),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) =>
+                          setState(() => _query = v.trim().toLowerCase()),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar por producto o persona…',
+                        hintStyle: const TextStyle(fontSize: 13.5),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              Container(
-                color: Colors.white,
-                child: const TabBar(
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: AppColors.primary,
-                  labelStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                  tabs: [
-                    Tab(text: 'Compras'),
-                    Tab(text: 'Ventas'),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _HistoryList(
-                      type: TransactionType.compra,
-                      query: _query,
-                      responsive: responsive,
+                  Container(
+                    color: Colors.white,
+                    child: const TabBar(
+                      labelColor: AppColors.primary,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: AppColors.primary,
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                      tabs: [
+                        Tab(text: 'Compras'),
+                        Tab(text: 'Ventas'),
+                      ],
                     ),
-                    _HistoryList(
-                      type: TransactionType.venta,
-                      query: _query,
-                      responsive: responsive,
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _HistoryList(
+                          items: all
+                              .where((t) => t.type == TransactionType.compra)
+                              .toList(),
+                          type: TransactionType.compra,
+                          query: _query,
+                          responsive: responsive,
+                        ),
+                        _HistoryList(
+                          items: all
+                              .where((t) => t.type == TransactionType.venta)
+                              .toList(),
+                          type: TransactionType.venta,
+                          query: _query,
+                          responsive: responsive,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -111,36 +160,48 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
 }
 
 class _HistoryList extends StatelessWidget {
+  final List<ProfileTransaction> items;
   final TransactionType type;
   final String query;
   final Responsive responsive;
 
-  const _HistoryList({required this.type, required this.query, required this.responsive});
+  const _HistoryList({
+    required this.items,
+    required this.type,
+    required this.query,
+    required this.responsive,
+  });
 
   @override
   Widget build(BuildContext context) {
-    var items = MockProfileRepository.transactions.where((t) => t.type == type).toList();
+    var filtered = items;
     if (query.isNotEmpty) {
-      items = items
-          .where((t) =>
-              t.productName.toLowerCase().contains(query) ||
-              t.counterpartName.toLowerCase().contains(query))
+      filtered = filtered
+          .where(
+            (t) =>
+                t.productName.toLowerCase().contains(query) ||
+                t.counterpartName.toLowerCase().contains(query),
+          )
           .toList();
     }
-    items.sort((a, b) => b.date.compareTo(a.date));
+    filtered.sort((a, b) => b.date.compareTo(a.date));
 
-    if (items.isEmpty) {
+    if (filtered.isEmpty) {
       return ListView(
         padding: EdgeInsets.symmetric(horizontal: responsive.horizontalPadding),
         children: [
           ProfileEmptyState(
-            icon: type == TransactionType.compra ? Icons.shopping_bag_outlined : Icons.sell_outlined,
-            title: query.isNotEmpty ? 'Sin resultados' : 'Aún no hay movimientos',
+            icon: type == TransactionType.compra
+                ? Icons.shopping_bag_outlined
+                : Icons.sell_outlined,
+            title: query.isNotEmpty
+                ? 'Sin resultados'
+                : 'Aún no hay movimientos',
             message: query.isNotEmpty
                 ? 'No encontramos nada para "$query".'
                 : type == TransactionType.compra
-                    ? 'Tus compras aparecerán aquí.'
-                    : 'Tus ventas aparecerán aquí.',
+                ? 'Tus compras aparecerán aquí.'
+                : 'Tus ventas aparecerán aquí.',
           ),
         ],
       );
@@ -151,9 +212,10 @@ class _HistoryList extends StatelessWidget {
         horizontal: responsive.horizontalPadding,
         vertical: AppSpacing.md,
       ),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) => _TransactionTile(transaction: items[index]),
+      itemCount: filtered.length,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+      itemBuilder: (context, index) =>
+          _TransactionTile(transaction: filtered[index]),
     );
   }
 }
@@ -178,18 +240,18 @@ class _TransactionTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: (isCompra ? AppColors.primary : AppColors.success).withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isCompra ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                size: 18,
-                color: isCompra ? AppColors.primary : AppColors.success,
-              ),
+            // Imagen real del producto en vez del ícono genérico
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: transaction.productImageUrl.isNotEmpty
+                  ? Image.network(
+                      transaction.productImageUrl,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _fallbackIcon(isCompra),
+                    )
+                  : _fallbackIcon(isCompra),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
@@ -200,17 +262,26 @@ class _TransactionTile extends StatelessWidget {
                     transaction.productName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${isCompra ? 'Vendedor' : 'Comprador'}: ${transaction.counterpartName}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     _formatDate(transaction.date),
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -220,14 +291,38 @@ class _TransactionTile extends StatelessWidget {
               children: [
                 Text(
                   'S/ ${transaction.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                  ),
                 ),
                 const SizedBox(height: 4),
-                StatusChip(label: transaction.status.label, color: transaction.status.color),
+                StatusChip(
+                  label: transaction.status.label,
+                  color: transaction.status.color,
+                ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _fallbackIcon(bool isCompra) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: (isCompra ? AppColors.primary : AppColors.success).withValues(
+          alpha: 0.1,
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Icon(
+        isCompra ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+        size: 20,
+        color: isCompra ? AppColors.primary : AppColors.success,
       ),
     );
   }
@@ -246,18 +341,41 @@ class _TransactionTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (transaction.productImageUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Image.network(
+                    transaction.productImageUrl,
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 transaction.productName,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               _DetailRow(label: 'Tipo', value: isCompra ? 'Compra' : 'Venta'),
-              _DetailRow(label: isCompra ? 'Vendedor' : 'Comprador', value: transaction.counterpartName),
+              _DetailRow(
+                label: isCompra ? 'Vendedor' : 'Comprador',
+                value: transaction.counterpartName,
+              ),
               _DetailRow(label: 'Fecha', value: _formatDate(transaction.date)),
-              _DetailRow(label: 'Monto', value: 'S/ ${transaction.amount.toStringAsFixed(2)}'),
+              _DetailRow(
+                label: 'Monto',
+                value: 'S/ ${transaction.amount.toStringAsFixed(2)}',
+              ),
               _DetailRow(label: 'Código', value: '#${transaction.id}'),
               const SizedBox(height: AppSpacing.sm),
-              StatusChip(label: transaction.status.label, color: transaction.status.color),
+              StatusChip(
+                label: transaction.status.label,
+                color: transaction.status.color,
+              ),
               const SizedBox(height: AppSpacing.lg),
               SizedBox(
                 width: double.infinity,
@@ -271,7 +389,10 @@ class _TransactionTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                   ),
-                  child: const Text('Cerrar', style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Cerrar',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ],
@@ -294,8 +415,17 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13.5)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13.5,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+          ),
         ],
       ),
     );

@@ -148,7 +148,7 @@ class _ListingsTab extends StatelessWidget {
         vertical: AppSpacing.md,
       ),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) =>
           _ListingCard(listing: items[index], onChanged: onChanged),
     );

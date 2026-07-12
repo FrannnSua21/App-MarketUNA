@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../widgets/auth_shared_widgets.dart';
 import '../../../core/theme/app_theme.dart';
+import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,16 +31,43 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // TODO: conectar con tu AuthService / AuthProvider real
-    await Future.delayed(const Duration(milliseconds: 900));
+    final auth = context.read<AuthProvider>();
+    final success = await auth.login(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
-    context.go('/home');
+
+    if (success) {
+      context.go('/home');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Error al iniciar sesión')),
+      );
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.loginWithBiometrics();
+    if (!mounted) return;
+    if (ok) {
+      context.go('/home');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo verificar tu huella')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final showBiometricButton =
+        auth.biometricAvailable && auth.biometricEnabled && auth.isLoggedIn;
+
     return AuthScaffold(
       child: FadeSlideIn(
         child: Column(
@@ -94,6 +123,56 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                     const SizedBox(height: AppSpacing.lg),
+
+                    if (showBiometricButton) ...[
+                      Center(
+                        child: GestureDetector(
+                          onTap: _handleBiometricLogin,
+                          child: Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.fingerprint,
+                              color: AppColors.primary,
+                              size: 40,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      const Center(
+                        child: Text(
+                          'Toca para iniciar con tu huella',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Divider(color: AppColors.border),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              'o',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ),
+                          const Expanded(
+                            child: Divider(color: AppColors.border),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
 
                     GlassTextField(
                       controller: _emailController,
@@ -160,51 +239,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: AppSpacing.lg),
 
                     Row(
-                      children: [
-                        const Expanded(child: Divider(color: AppColors.border)),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            'o',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        const Expanded(child: Divider(color: AppColors.border)),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: AppColors.fieldFill,
-                          side: const BorderSide(color: AppColors.border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                          ),
-                        ),
-                        onPressed: () {
-                          // TODO: conectar login con Google
-                        },
-                        icon: const Text(
-                          'G',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        label: const Text(
-                          'Continuar con Google',
-                          style: TextStyle(color: AppColors.textPrimary),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
@@ -222,19 +256,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-
-                    Center(
-                      child: TextButton(
-                        onPressed: () {
-                          // TODO: navegación como invitado
-                        },
-                        child: const Text(
-                          'Continuar como invitado',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ),
                     ),
                   ],
                 ),

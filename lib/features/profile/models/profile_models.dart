@@ -1,14 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
 /// -----------------------------------------------------------------------
 /// MODELOS DE DATOS DEL PERFIL
-/// Mismo patrón que features/product/models/product.dart: modelos +
-/// enums + un repositorio mock que simula lo que vendría del backend.
+///
+/// UserProfile y ProfileTransaction ya están listos para Firestore
+/// (toMap/fromMap). El resto (MyListing, PaymentMethod, ActiveSession,
+/// AppLanguage) sigue igual que antes, con MockProfileRepository como
+/// fuente de datos de ejemplo — reemplázalos por repos reales cuando
+/// llegues a esas pantallas.
 /// -----------------------------------------------------------------------
 
-/// ---- Usuario ------------------------------------------------------------
+/// ---- Usuario (colección `users/{uid}` en Firestore) ---------------------
 
 class UserProfile {
   final String id;
@@ -19,6 +24,7 @@ class UserProfile {
   final String bio;
   final String address;
   final double rating;
+  final int ratingCount;
   final int totalVentas;
   final int totalCompras;
   final DateTime memberSince;
@@ -32,6 +38,7 @@ class UserProfile {
     this.bio = '',
     this.address = '',
     this.rating = 0,
+    this.ratingCount = 0,
     this.totalVentas = 0,
     this.totalCompras = 0,
     required this.memberSince,
@@ -57,14 +64,52 @@ class UserProfile {
       bio: bio ?? this.bio,
       address: address ?? this.address,
       rating: rating,
+      ratingCount: ratingCount,
       totalVentas: totalVentas,
       totalCompras: totalCompras,
       memberSince: memberSince,
     );
   }
+
+  /// Solo los campos editables por el propio usuario (para `update()`).
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'avatarUrl': avatarUrl,
+      'bio': bio,
+      'address': address,
+    };
+  }
+
+  factory UserProfile.fromMap(Map<String, dynamic> map, String id) {
+    final memberSinceTs = map['memberSince'];
+    return UserProfile(
+      id: id,
+      name: map['name'] as String? ?? '',
+      email: map['email'] as String? ?? '',
+      phone: map['phone'] as String? ?? '',
+      avatarUrl: map['avatarUrl'] as String?,
+      bio: map['bio'] as String? ?? '',
+      address: map['address'] as String? ?? '',
+      rating: (map['rating'] as num?)?.toDouble() ?? 0,
+      ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
+      totalVentas: (map['totalVentas'] as num?)?.toInt() ?? 0,
+      totalCompras: (map['totalCompras'] as num?)?.toInt() ?? 0,
+      memberSince: memberSinceTs is Timestamp
+          ? memberSinceTs.toDate()
+          : DateTime.now(),
+    );
+  }
 }
 
-/// ---- Publicaciones del usuario ------------------------------------------
+/// ---- Publicaciones del usuario (usada por profile_listings_page) --------
+///
+/// Nota: si ya migraste a ProductRepository, "mis publicaciones" son en
+/// realidad los Product donde sellerId == mi uid (con su propio
+/// ProductStatus). MyListing se deja aquí para no romper la pantalla
+/// actual mientras haces esa migración con calma.
 
 enum ListingStatus { activa, pausada, vendida }
 
@@ -124,7 +169,7 @@ class MyListing {
   }
 }
 
-/// ---- Historial de compras y ventas --------------------------------------
+/// ---- Historial de compras y ventas (colección `transactions`) -----------
 
 enum TransactionType { compra, venta }
 
@@ -157,7 +202,9 @@ extension TransactionStatusX on TransactionStatus {
 class ProfileTransaction {
   final String id;
   final TransactionType type;
+  final String productId;
   final String productName;
+  final String productImageUrl; // NUEVO
   final String counterpartName;
   final double amount;
   final DateTime date;
@@ -166,15 +213,42 @@ class ProfileTransaction {
   const ProfileTransaction({
     required this.id,
     required this.type,
+    this.productId = '',
     required this.productName,
+    this.productImageUrl = '', // NUEVO
     required this.counterpartName,
     required this.amount,
     required this.date,
     required this.status,
   });
+
+  factory ProfileTransaction.fromMap(
+    Map<String, dynamic> map,
+    String id,
+    String currentUid,
+  ) {
+    final isBuyer = map['buyerId'] == currentUid;
+    final dateTs = map['createdAt'];
+    return ProfileTransaction(
+      id: id,
+      type: isBuyer ? TransactionType.compra : TransactionType.venta,
+      productId: map['productId'] as String? ?? '',
+      productName: map['productTitle'] as String? ?? '',
+      productImageUrl: map['productImageUrl'] as String? ?? '', // NUEVO
+      counterpartName: isBuyer
+          ? (map['sellerName'] as String? ?? '')
+          : (map['buyerName'] as String? ?? ''),
+      amount: (map['amount'] as num?)?.toDouble() ?? 0,
+      date: dateTs is Timestamp ? dateTs.toDate() : DateTime.now(),
+      status: TransactionStatus.values.firstWhere(
+        (s) => s.name == map['status'],
+        orElse: () => TransactionStatus.enProceso,
+      ),
+    );
+  }
 }
 
-/// ---- Métodos de pago ------------------------------------------------------
+/// ---- Métodos de pago (usada por profile_payment_methods_page) -----------
 
 enum PaymentMethodType { visa, mastercard, amex, other }
 
@@ -243,7 +317,7 @@ class PaymentMethod {
   }
 }
 
-/// ---- Sesiones activas (privacidad y seguridad) ---------------------------
+/// ---- Sesiones activas (usada por profile_security_page) -----------------
 
 class ActiveSession {
   final String id;
@@ -263,22 +337,25 @@ class ActiveSession {
   });
 }
 
-/// ---- Idioma ---------------------------------------------------------------
+/// ---- Idioma (usada por profile_language_page) ---------------------------
 
 class AppLanguage {
   final String code;
   final String name;
   final String flag;
 
-  const AppLanguage({required this.code, required this.name, required this.flag});
+  const AppLanguage({
+    required this.code,
+    required this.name,
+    required this.flag,
+  });
 }
 
 /// ---------------------------------------------------------------------------
 /// REPOSITORIO MOCK
-/// Reemplaza esto por llamadas reales a tu backend / AuthProvider cuando
-/// esté listo. Se guarda en memoria para que los cambios (editar perfil,
-/// pausar publicaciones, agregar tarjetas, etc.) se reflejen durante la
-/// sesión de la app.
+/// Sigue usándose para: publicaciones (por ahora), métodos de pago,
+/// sesiones activas e idioma. `currentUser` y `transactions` puedes
+/// reemplazarlos poco a poco por UserRepository/TransactionRepository.
 /// ---------------------------------------------------------------------------
 class MockProfileRepository {
   MockProfileRepository._();

@@ -30,7 +30,7 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
   bool _twoFactorEnabled = false;
   bool _savingPassword = false;
 
-  late List<ActiveSession> _sessions = List.of(MockProfileRepository.activeSessions);
+  late final List<ActiveSession> _sessions = List.of(MockProfileRepository.activeSessions);
 
   @override
   void dispose() {

@@ -1,0 +1,25 @@
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "martekunap",
+                    "appId": "1:363217250002:android:f53a1e7a5fb0c1c3ee2f0b",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "martekunap",
+                    "configurations": {
+                        "android": "1:363217250002:android:f53a1e7a5fb0c1c3ee2f0b",
+                        "ios": "1:363217250002:ios:c815294ce60fd6c1ee2f0b",
+                        "macos": "1:363217250002:ios:c815294ce60fd6c1ee2f0b",
+                        "web": "1:363217250002:web:242b31586ceda85cee2f0b",
+                        "windows": "1:363217250002:web:42a27aa0c80d2005ee2f0b"
+                    }
+                }
+            }
+        }
+    }
+}

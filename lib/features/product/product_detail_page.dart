@@ -1,14 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/services/firestore_service.dart'; // ajusta la ruta real
 import 'models/product.dart';
 import 'widgets/product_card.dart';
 
-/// -----------------------------------------------------------------------
-/// DETALLE DE PRODUCTO
-/// Se abre al tocar una ProductCard desde Home o el buscador.
-/// -----------------------------------------------------------------------
 class ProductDetailPage extends StatefulWidget {
   final String productId;
   const ProductDetailPage({super.key, required this.productId});
@@ -21,9 +19,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   final PageController _pageController = PageController();
   int _currentImage = 0;
   bool _isFavorite = false;
+  bool _isLoading = true;
+  Product? _product;
 
-  // TODO: reemplaza por el id del usuario que inició sesión.
-  final bool _isOwner = false;
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProduct();
+  }
+
+  Future<void> _loadProduct() async {
+    final product = await FirestoreService.getProductById(widget.productId);
+    if (!mounted) return;
+    setState(() {
+      _product = product;
+      _isLoading = false;
+    });
+    if (product != null) {
+      FirestoreService.incrementProductViews(product.id);
+    }
+  }
 
   @override
   void dispose() {
@@ -33,8 +50,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final product = findProductById(widget.productId);
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
+    final product = _product;
     if (product == null) {
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -43,12 +63,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
     }
 
-    _isFavorite = _isFavorite || product.isFavorite;
+    final isOwner = _uid != null && _uid == product.sellerId;
     final responsive = Responsive(context);
-    final related = mockProducts
-        .where((p) => p.category == product.category && p.id != product.id)
-        .take(4)
-        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -189,37 +205,50 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       height: 1.5,
                     ),
                   ),
-                  if (related.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xl),
-                    const Text(
-                      'Publicaciones similares',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
+                  const SizedBox(height: AppSpacing.xl),
+                  const Text(
+                    'Publicaciones similares',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      height: 230,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: related.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: AppSpacing.sm),
-                        itemBuilder: (context, index) {
-                          final item = related[index];
-                          return SizedBox(
-                            width: 150,
-                            child: ProductCard(
-                              product: item,
-                              onTap: () => context.push('/product/${item.id}'),
-                            ),
-                          );
-                        },
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    height: 230,
+                    child: StreamBuilder<List<Product>>(
+                      stream: FirestoreService.watchFeed(
+                        category: product.category,
                       ),
+                      builder: (context, snap) {
+                        final related = (snap.data ?? [])
+                            .where((p) => p.id != product.id)
+                            .take(4)
+                            .toList();
+                        if (related.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: related.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(width: AppSpacing.sm),
+                          itemBuilder: (context, index) {
+                            final item = related[index];
+                            return SizedBox(
+                              width: 150,
+                              child: ProductCard(
+                                product: item,
+                                onTap: () =>
+                                    context.push('/product/${item.id}'),
+                              ),
+                            );
+                          },
+                        );
+                      },
                     ),
-                  ],
+                  ),
                   const SizedBox(height: 100),
                 ],
               ),
@@ -227,10 +256,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ],
       ),
-      bottomNavigationBar: _isOwner
+      bottomNavigationBar: isOwner
           ? _OwnerActionsBar(
               onEdit: () => context.push('/product/${product.id}/edit'),
-              onDelete: () => _confirmDelete(context),
+              onDelete: () => _confirmDelete(context, product.id),
             )
           : _BuyerActionsBar(
               onMessage: () {
@@ -243,7 +272,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  void _confirmDelete(BuildContext context) {
+  void _confirmDelete(BuildContext context, String productId) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -263,10 +292,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(dialogContext).pop();
-              // TODO: llama a tu backend para eliminar el producto.
-              context.pop();
+              await FirestoreService.deleteProduct(productId);
+              if (mounted) context.pop();
             },
             child: const Text(
               'Eliminar',
@@ -282,9 +311,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// CARRUSEL DE IMÁGENES CON BOTÓN DE VOLVER Y FAVORITO SUPERPUESTOS
-/// -----------------------------------------------------------------------
 class _ImageCarousel extends StatelessWidget {
   final List<String> imageUrls;
   final PageController pageController;
@@ -319,7 +345,7 @@ class _ImageCarousel extends StatelessWidget {
                 imageUrls[index],
                 fit: BoxFit.cover,
                 width: double.infinity,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: AppColors.fieldFill,
                   child: const Icon(
                     Icons.image_not_supported_outlined,
@@ -408,9 +434,6 @@ class _CircleIconButton extends StatelessWidget {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// TARJETA DEL VENDEDOR
-/// -----------------------------------------------------------------------
 class _SellerCard extends StatelessWidget {
   final SellerInfo seller;
   const _SellerCard({required this.seller});
@@ -502,9 +525,6 @@ class _SellerCard extends StatelessWidget {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// BARRA INFERIOR PARA UN COMPRADOR (mensaje / comprar)
-/// -----------------------------------------------------------------------
 class _BuyerActionsBar extends StatelessWidget {
   final VoidCallback onMessage;
   final VoidCallback onBuy;
@@ -570,9 +590,6 @@ class _BuyerActionsBar extends StatelessWidget {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// BARRA INFERIOR PARA EL DUEÑO DE LA PUBLICACIÓN (editar / eliminar)
-/// -----------------------------------------------------------------------
 class _OwnerActionsBar extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;

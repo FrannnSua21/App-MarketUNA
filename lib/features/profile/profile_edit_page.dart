@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/services/firestore_service.dart';
 import 'models/profile_models.dart';
 import 'widgets/profile_widgets.dart';
 
 /// -----------------------------------------------------------------------
 /// EDITAR PERFIL
-/// Recibe el UserProfile actual por `extra` (ver ProfilePage._openEditProfile)
-/// y devuelve la versión actualizada al hacer pop.
+/// Recibe el UserProfile actual por `extra` (ver ProfilePage._openEditProfile).
+/// Por ahora solo el TELÉFONO es editable; el resto de campos se muestran
+/// de solo lectura. Al guardar, escribe directo en Firestore
+/// (users/{uid}) — no hace falta manejar el valor de retorno porque
+/// ProfilePage escucha esos cambios en vivo con un StreamBuilder.
 /// -----------------------------------------------------------------------
 class ProfileEditPage extends StatefulWidget {
   final UserProfile? user;
@@ -23,21 +27,13 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   late final UserProfile _original =
       widget.user ?? MockProfileRepository.currentUser;
 
-  late final _nameCtrl = TextEditingController(text: _original.name);
-  late final _emailCtrl = TextEditingController(text: _original.email);
   late final _phoneCtrl = TextEditingController(text: _original.phone);
-  late final _bioCtrl = TextEditingController(text: _original.bio);
-  late final _addressCtrl = TextEditingController(text: _original.address);
 
   bool _saving = false;
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _bioCtrl.dispose();
-    _addressCtrl.dispose();
     super.dispose();
   }
 
@@ -68,36 +64,37 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               _FieldCard(
                 child: Column(
                   children: [
-                    _EditField(
-                      controller: _nameCtrl,
+                    // Solo lectura: nombre
+                    _ReadOnlyField(
                       label: 'Nombre completo',
+                      value: _original.name,
                       icon: Icons.person_outline,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null,
                     ),
                     const _FieldDivider(),
-                    _EditField(
-                      controller: _emailCtrl,
+                    // Solo lectura: correo
+                    _ReadOnlyField(
                       label: 'Correo electrónico',
+                      value: _original.email,
                       icon: Icons.mail_outline,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
-                        final valid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim());
-                        return valid ? null : 'Correo no válido';
-                      },
                     ),
                     const _FieldDivider(),
+                    // ÚNICO campo editable: teléfono
                     _EditField(
                       controller: _phoneCtrl,
                       label: 'Teléfono',
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Ingresa tu teléfono'
+                          : null,
                     ),
                     const _FieldDivider(),
-                    _EditField(
-                      controller: _addressCtrl,
+                    // Solo lectura: ubicación
+                    _ReadOnlyField(
                       label: 'Ubicación',
+                      value: _original.address.isNotEmpty
+                          ? _original.address
+                          : 'Sin especificar',
                       icon: Icons.location_on_outlined,
                     ),
                   ],
@@ -107,18 +104,30 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               const SectionLabel('Acerca de ti'),
               const SizedBox(height: AppSpacing.sm),
               _FieldCard(
-                child: TextFormField(
-                  controller: _bioCtrl,
-                  maxLines: 4,
-                  maxLength: 160,
-                  decoration: const InputDecoration(
-                    hintText: 'Cuéntale a los demás sobre ti…',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Text(
+                    _original.bio.isNotEmpty
+                        ? _original.bio
+                        : 'Sin descripción',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'Por ahora solo puedes actualizar tu teléfono. El resto de '
+                'datos se muestran únicamente de referencia.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -145,7 +154,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                         )
                       : const Text(
                           'Guardar cambios',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                         ),
                 ),
               ),
@@ -161,20 +173,22 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    // TODO: reemplaza por tu llamada real al backend/AuthService.
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final updated = _original.copyWith(
-      name: _nameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      bio: _bioCtrl.text.trim(),
-      address: _addressCtrl.text.trim(),
-    );
+    try {
+      await FirestoreService.updateUserProfile(_original.id, {
+        'phone': _phoneCtrl.text.trim(),
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _saving = false);
-    context.pop(updated);
+    context.pop();
   }
 }
 
@@ -191,7 +205,9 @@ class _AvatarPicker extends StatelessWidget {
           CircleAvatar(
             radius: 44,
             backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-            backgroundImage: user.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
+            backgroundImage: user.avatarUrl != null
+                ? NetworkImage(user.avatarUrl!)
+                : null,
             child: user.avatarUrl == null
                 ? Text(
                     user.initials,
@@ -214,7 +230,11 @@ class _AvatarPicker extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: const Icon(Icons.camera_alt, color: Colors.white, size: 15),
+              child: const Icon(
+                Icons.camera_alt,
+                color: Colors.white,
+                size: 15,
+              ),
             ),
           ),
         ],
@@ -235,7 +255,10 @@ class _AvatarPicker extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
+                leading: const Icon(
+                  Icons.photo_camera_outlined,
+                  color: AppColors.primary,
+                ),
                 title: const Text('Tomar foto'),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
@@ -243,7 +266,10 @@ class _AvatarPicker extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+                leading: const Icon(
+                  Icons.photo_library_outlined,
+                  color: AppColors.primary,
+                ),
                 title: const Text('Elegir de la galería'),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
@@ -252,7 +278,10 @@ class _AvatarPicker extends StatelessWidget {
               ),
               if (user.avatarUrl != null)
                 ListTile(
-                  leading: const Icon(Icons.delete_outline, color: AppColors.error),
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: AppColors.error,
+                  ),
                   title: const Text(
                     'Quitar foto',
                     style: TextStyle(color: AppColors.error),
@@ -270,7 +299,9 @@ class _AvatarPicker extends StatelessWidget {
   }
 
   void _notify(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -333,6 +364,59 @@ class _EditField extends StatelessWidget {
           horizontal: AppSpacing.sm,
           vertical: 12,
         ),
+      ),
+    );
+  }
+}
+
+/// Campo de solo lectura: misma apariencia que _EditField pero
+/// deshabilitado, para mostrar (no editar) nombre, correo, ubicación.
+class _ReadOnlyField extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _ReadOnlyField({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 12,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.textSecondary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.isNotEmpty ? value : '—',
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.lock_outline, size: 16, color: AppColors.border),
+        ],
       ),
     );
   }

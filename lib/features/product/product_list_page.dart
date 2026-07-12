@@ -167,7 +167,7 @@ class _ProductListPageState extends State<ProductListPage> {
                 ),
                 scrollDirection: Axis.horizontal,
                 itemCount: productCategories.length,
-                separatorBuilder: (_, __) =>
+                separatorBuilder: (_, _) =>
                     const SizedBox(width: AppSpacing.sm),
                 itemBuilder: (context, index) {
                   final category = productCategories[index];
@@ -271,7 +271,7 @@ class _ProductListPageState extends State<ProductListPage> {
                         AppSpacing.xl,
                       ),
                       itemCount: results.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const SizedBox(height: AppSpacing.sm),
                       itemBuilder: (context, index) {
                         final product = results[index];
@@ -436,7 +436,7 @@ class _ProductListTile extends StatelessWidget {
                 width: 84,
                 height: 84,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: 84,
                   height: 84,
                   color: AppColors.fieldFill,

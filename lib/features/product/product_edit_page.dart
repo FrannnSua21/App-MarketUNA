@@ -1,18 +1,24 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/services/firestore_service.dart'; // ajusta la ruta real
 import 'models/product.dart';
 
-/// -----------------------------------------------------------------------
-/// EDICIÓN DE PRODUCTO
-/// Formulario prellenado con los datos del producto. Sirve tanto para
-/// "editar publicación" como de base para "publicar" (en ese caso solo
-/// pásale un productId nuevo/opcional y ajusta el título del AppBar).
-/// -----------------------------------------------------------------------
+/// API key gratuita de https://api.imgbb.com (no pide tarjeta).
+const String _imgbbApiKey = 'cc88c73fafa9ce4a884d123dea16157e';
+
 class ProductEditPage extends StatefulWidget {
-  final String productId;
-  const ProductEditPage({super.key, required this.productId});
+  /// null = crear publicación nueva. Con valor = editar esa existente.
+  final String? productId;
+  const ProductEditPage({super.key, this.productId});
 
   @override
   State<ProductEditPage> createState() => _ProductEditPageState();
@@ -20,38 +26,49 @@ class ProductEditPage extends StatefulWidget {
 
 class _ProductEditPageState extends State<ProductEditPage> {
   final _formKey = GlobalKey<FormState>();
+  final _picker = ImagePicker();
 
   late TextEditingController _titleController;
   late TextEditingController _priceController;
   late TextEditingController _descriptionController;
   late TextEditingController _locationController;
 
-  late List<String> _imageUrls;
-  late String _category;
-  late ProductCondition _condition;
+  /// Cada elemento es String (url ya subida) o File (foto local sin subir).
+  List<dynamic> _images = [];
+  String _category = productCategories.firstWhere((c) => c != 'Todos');
+  ProductCondition _condition = ProductCondition.buenEstado;
 
   bool _isSaving = false;
+  bool _isLoadingProduct = true;
+  Product? _existingProduct;
 
-  Product? get _product => findProductById(widget.productId);
+  bool get _isEditing => widget.productId != null;
 
   @override
   void initState() {
     super.initState();
-    final product = _product;
-    _titleController = TextEditingController(text: product?.title ?? '');
-    _priceController = TextEditingController(
-      text: product != null ? product.price.toStringAsFixed(0) : '',
-    );
-    _descriptionController = TextEditingController(
-      text: product?.description ?? '',
-    );
-    _locationController = TextEditingController(
-      text: product?.location ?? 'Arequipa, Perú',
-    );
-    _imageUrls = List.of(product?.imageUrls ?? const []);
-    _category =
-        product?.category ?? productCategories.firstWhere((c) => c != 'Todos');
-    _condition = product?.condition ?? ProductCondition.buenEstado;
+    _titleController = TextEditingController();
+    _priceController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _locationController = TextEditingController(text: 'Arequipa, Perú');
+    _loadIfEditing();
+  }
+
+  Future<void> _loadIfEditing() async {
+    if (_isEditing) {
+      final product = await FirestoreService.getProductById(widget.productId!);
+      if (product != null) {
+        _existingProduct = product;
+        _titleController.text = product.title;
+        _priceController.text = product.price.toStringAsFixed(0);
+        _descriptionController.text = product.description;
+        _locationController.text = product.location;
+        _images = List.of(product.imageUrls);
+        _category = product.category;
+        _condition = product.condition;
+      }
+    }
+    if (mounted) setState(() => _isLoadingProduct = false);
   }
 
   @override
@@ -63,10 +80,75 @@ class _ProductEditPageState extends State<ProductEditPage> {
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Elegir de galería'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final xfile = await _picker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 1280,
+    );
+    if (xfile != null) {
+      setState(() => _images.add(File(xfile.path)));
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() => _images.removeAt(index));
+  }
+
+  Future<List<String>> _uploadPendingImages() async {
+    final result = <String>[];
+    for (final item in _images) {
+      if (item is String) {
+        result.add(item);
+      } else if (item is File) {
+        result.add(await _uploadSingleImageToImgbb(item));
+      }
+    }
+    return result;
+  }
+
+  Future<String> _uploadSingleImageToImgbb(File file) async {
+    final bytes = await file.readAsBytes();
+    final base64Image = base64Encode(bytes);
+
+    final response = await http.post(
+      Uri.parse('https://api.imgbb.com/1/upload?key=$_imgbbApiKey'),
+      body: {'image': base64Image},
+    );
+
+    final data = jsonDecode(response.body);
+    if (data['success'] == true) {
+      return data['data']['url'] as String;
+    }
+    throw Exception(
+      'No se pudo subir la imagen: ${data['error']?['message'] ?? 'error desconocido'}',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final responsive = Responsive(context);
-    final product = _product;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -74,15 +156,17 @@ class _ProductEditPageState extends State<ProductEditPage> {
         backgroundColor: AppColors.background,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        title: const Text(
-          'Editar publicación',
-          style: TextStyle(
+        title: Text(
+          _isEditing ? 'Editar publicación' : 'Publicar producto',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
       ),
-      body: product == null
+      body: _isLoadingProduct
+          ? const Center(child: CircularProgressIndicator())
+          : (_isEditing && _existingProduct == null)
           ? const Center(child: Text('Producto no encontrado'))
           : Form(
               key: _formKey,
@@ -95,18 +179,9 @@ class _ProductEditPageState extends State<ProductEditPage> {
                   const _FieldLabel('Fotos'),
                   const SizedBox(height: AppSpacing.sm),
                   _ImagesEditor(
-                    imageUrls: _imageUrls,
-                    onAdd: () {
-                      // TODO: abre el selector de imágenes (image_picker) y
-                      // agrega la url/ruta resultante a _imageUrls.
-                      setState(() {
-                        _imageUrls.add(
-                          'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
-                        );
-                      });
-                    },
-                    onRemove: (index) =>
-                        setState(() => _imageUrls.removeAt(index)),
+                    images: _images,
+                    onAdd: _pickImage,
+                    onRemove: _removeImage,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   const _FieldLabel('Título'),
@@ -114,8 +189,7 @@ class _ProductEditPageState extends State<ProductEditPage> {
                   _FormTextField(
                     controller: _titleController,
                     hint: 'Ej. MacBook Air M1 2020',
-                    validator: (value) =>
-                        (value == null || value.trim().isEmpty)
+                    validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Ingresa un título'
                         : null,
                   ),
@@ -129,8 +203,8 @@ class _ProductEditPageState extends State<ProductEditPage> {
                       decimal: true,
                     ),
                     prefixText: 'S/ ',
-                    validator: (value) {
-                      final parsed = double.tryParse(value ?? '');
+                    validator: (v) {
+                      final parsed = double.tryParse(v ?? '');
                       if (parsed == null || parsed <= 0) {
                         return 'Ingresa un precio válido';
                       }
@@ -142,7 +216,7 @@ class _ProductEditPageState extends State<ProductEditPage> {
                   const SizedBox(height: AppSpacing.sm),
                   _CategoryDropdown(
                     value: _category,
-                    onChanged: (value) => setState(() => _category = value),
+                    onChanged: (v) => setState(() => _category = v),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   const _FieldLabel('Estado del producto'),
@@ -213,9 +287,9 @@ class _ProductEditPageState extends State<ProductEditPage> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              'Guardar cambios',
-                              style: TextStyle(
+                          : Text(
+                              _isEditing ? 'Guardar cambios' : 'Publicar',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -243,7 +317,7 @@ class _ProductEditPageState extends State<ProductEditPage> {
 
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_imageUrls.isEmpty) {
+    if (_images.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Agrega al menos una foto')));
@@ -251,39 +325,74 @@ class _ProductEditPageState extends State<ProductEditPage> {
     }
 
     setState(() => _isSaving = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final price = double.parse(_priceController.text);
+      final urls = await _uploadPendingImages();
 
-    // TODO: reemplaza esto por la llamada real a tu backend
-    // (Firestore/API) para actualizar el producto con:
-    // _titleController.text, _priceController.text, _category,
-    // _condition, _descriptionController.text, _locationController.text,
-    // _imageUrls.
-    await Future.delayed(const Duration(milliseconds: 800));
+      if (_isEditing) {
+        await FirestoreService.updateProduct(widget.productId!, {
+          'title': _titleController.text.trim(),
+          'price': price,
+          'category': _category,
+          'condition': _condition.name,
+          'description': _descriptionController.text.trim(),
+          'location': _locationController.text.trim(),
+          'imageUrls': urls,
+        });
+      } else {
+        final docRef = FirestoreService.newProductRef();
+        final product = Product(
+          id: docRef.id,
+          sellerId: uid,
+          title: _titleController.text.trim(),
+          price: price,
+          category: _category,
+          timeAgo: '',
+          condition: _condition,
+          imageUrls: urls,
+          description: _descriptionController.text.trim(),
+          location: _locationController.text.trim(),
+        );
 
-    if (!mounted) return;
-    setState(() => _isSaving = false);
+        final data = product.toMap();
+        data['createdAt'] = FieldValue.serverTimestamp();
+        data['updatedAt'] = FieldValue.serverTimestamp();
+        await docRef.set(data);
+      }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Publicación actualizada')));
-    context.pop();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isEditing ? 'Publicación actualizada' : 'Producto publicado',
+          ),
+        ),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al guardar: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }
 
 class _FieldLabel extends StatelessWidget {
   final String text;
   const _FieldLabel(this.text);
-
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary,
+    ),
+  );
 }
 
 class _FormTextField extends StatelessWidget {
@@ -345,13 +454,11 @@ class _FormTextField extends StatelessWidget {
 class _CategoryDropdown extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
-
   const _CategoryDropdown({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final options = productCategories.where((c) => c != 'Todos').toList();
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -371,8 +478,8 @@ class _CategoryDropdown extends StatelessWidget {
                     DropdownMenuItem(value: option, child: Text(option)),
               )
               .toList(),
-          onChanged: (newValue) {
-            if (newValue != null) onChanged(newValue);
+          onChanged: (v) {
+            if (v != null) onChanged(v);
           },
         ),
       ),
@@ -380,16 +487,13 @@ class _CategoryDropdown extends StatelessWidget {
   }
 }
 
-/// -----------------------------------------------------------------------
-/// EDITOR DE FOTOS: grid con las imágenes actuales + botón de agregar
-/// -----------------------------------------------------------------------
 class _ImagesEditor extends StatelessWidget {
-  final List<String> imageUrls;
+  final List<dynamic> images;
   final VoidCallback onAdd;
   final ValueChanged<int> onRemove;
 
   const _ImagesEditor({
-    required this.imageUrls,
+    required this.images,
     required this.onAdd,
     required this.onRemove,
   });
@@ -400,10 +504,10 @@ class _ImagesEditor extends StatelessWidget {
       height: 90,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: imageUrls.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+        itemCount: images.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
         itemBuilder: (context, index) {
-          if (index == imageUrls.length) {
+          if (index == images.length) {
             return GestureDetector(
               onTap: onAdd,
               child: Container(
@@ -412,10 +516,7 @@ class _ImagesEditor extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.fieldFill,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(
-                    color: AppColors.primary,
-                    style: BorderStyle.solid,
-                  ),
+                  border: Border.all(color: AppColors.primary),
                 ),
                 child: const Icon(
                   Icons.add_a_photo_outlined,
@@ -425,25 +526,35 @@ class _ImagesEditor extends StatelessWidget {
             );
           }
 
+          final item = images[index];
+          Widget imageWidget;
+          if (item is String) {
+            imageWidget = Image.network(
+              item,
+              width: 90,
+              height: 90,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                width: 90,
+                height: 90,
+                color: AppColors.fieldFill,
+                child: const Icon(Icons.image_not_supported_outlined),
+              ),
+            );
+          } else {
+            imageWidget = Image.file(
+              item as File,
+              width: 90,
+              height: 90,
+              fit: BoxFit.cover,
+            );
+          }
+
           return Stack(
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: Image.network(
-                  imageUrls[index],
-                  width: 90,
-                  height: 90,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 90,
-                    height: 90,
-                    color: AppColors.fieldFill,
-                    child: const Icon(
-                      Icons.image_not_supported_outlined,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
+                child: imageWidget,
               ),
               Positioned(
                 top: 4,

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../widgets/auth_shared_widgets.dart';
 import '../../../core/theme/app_theme.dart';
+import '../providers/auth_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,6 +19,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
   bool _isLoading = false;
   bool _registered = false;
 
@@ -26,6 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -33,19 +40,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // TODO: guardar estos datos (paso 1) y navegar al Paso 2 (contraseña, etc.)
-    await Future.delayed(const Duration(milliseconds: 900));
+    final auth = context.read<AuthProvider>();
+    final nombreCompleto =
+        '${_nameController.text.trim()} ${_lastNameController.text.trim()}'
+            .trim();
+
+    final success = await auth.register(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+      name: nombreCompleto,
+      phone: _phoneController.text.trim(),
+    );
 
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _registered = true;
-    });
+    setState(() => _isLoading = false);
 
-    // Deja ver la animación de éxito un momento antes de navegar.
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted) context.go('/home');
-    });
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.errorMessage ?? 'Error al crear la cuenta'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _registered = true);
+
+    if (auth.biometricAvailable) {
+      await _ofrecerBiometria(auth);
+    }
+
+    if (!mounted) return;
+    context.go('/home');
+  }
+
+  Future<void> _ofrecerBiometria(AuthProvider auth) async {
+    final quiere = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.fingerprint, color: AppColors.primary, size: 40),
+        title: const Text('¿Activar huella digital?'),
+        content: const Text(
+          'La próxima vez podrás iniciar sesión más rápido usando tu huella o Face ID.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+
+    if (quiere == true) {
+      final verificado = await auth.loginWithBiometrics();
+      if (verificado) {
+        await auth.enableBiometric();
+      }
+    }
   }
 
   @override
@@ -105,22 +162,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             'Crear cuenta',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Paso 1 de 2 — Datos personales',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: const LinearProgressIndicator(
-              value: 0.5,
-              minHeight: 6,
-              backgroundColor: AppColors.border,
-              valueColor: AlwaysStoppedAnimation(AppColors.primary),
-            ),
-          ),
           const SizedBox(height: AppSpacing.lg),
 
           GlassTextField(
@@ -166,6 +207,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
             keyboardType: TextInputType.phone,
             validator: (value) =>
                 (value == null || value.isEmpty) ? 'Ingresa tu teléfono' : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          GlassTextField(
+            controller: _passwordController,
+            label: 'Contraseña',
+            hint: 'Mínimo 6 caracteres',
+            icon: Icons.lock_outline,
+            obscureText: _obscurePassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 20,
+              ),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Ingresa una contraseña';
+              }
+              if (value.length < 6) return 'Mínimo 6 caracteres';
+              return null;
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          GlassTextField(
+            controller: _confirmPasswordController,
+            label: 'Confirmar contraseña',
+            hint: 'Repite tu contraseña',
+            icon: Icons.lock_outline,
+            obscureText: _obscurePassword,
+            validator: (value) {
+              if (value != _passwordController.text) {
+                return 'Las contraseñas no coinciden';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: AppSpacing.xl),
 

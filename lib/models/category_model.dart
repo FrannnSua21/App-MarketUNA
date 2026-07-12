@@ -1,2 +1,0 @@
-//category modelgi
-//sammmmm

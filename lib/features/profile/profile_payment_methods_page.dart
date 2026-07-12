@@ -46,7 +46,7 @@ class _ProfilePaymentMethodsPageState extends State<ProfilePaymentMethodsPage> {
                   vertical: AppSpacing.lg,
                 ),
                 itemCount: methods.length,
-                separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+                separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
                 itemBuilder: (context, index) => _PaymentCard(
                   method: methods[index],
                   onChanged: () => setState(() {}),
