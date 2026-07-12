@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/services/firestore_service.dart'; // ajusta la ruta real
+import '../../core/services/transaction_service.dart';
+import '../profile/models/profile_models.dart';
 import 'models/product.dart';
 import 'widgets/product_card.dart';
 
@@ -22,6 +25,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   bool _isLoading = true;
   Product? _product;
 
+  bool _isBuying = false;
+
+  // CAMBIO: antes era "bool _alreadyRequested = false" con un chequeo
+  // de una sola vez. Ahora es un stream cacheado aquí, se arma una vez
+  // en _loadProduct() y el StreamBuilder del build() se encarga de
+  // reaccionar en vivo cuando el vendedor acepta/rechaza.
+  Stream<ProfileTransaction?>? _myRequestStream;
+
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   @override
@@ -39,6 +50,61 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     });
     if (product != null) {
       FirestoreService.incrementProductViews(product.id);
+
+      final uid = _uid;
+      if (uid != null && uid != product.sellerId) {
+        // CAMBIO: ya no hacemos un "await hasPendingRequest(...)" de una
+        // sola vez. Solo armamos el stream; el StreamBuilder en build()
+        // hace la primera lectura Y sigue escuchando cambios después.
+        setState(() {
+          _myRequestStream = TransactionService.watchMyLatestRequest(
+            productId: product.id,
+            buyerId: uid,
+          );
+        });
+      }
+    }
+  }
+
+  Future<String> _fetchBuyerName(String uid) async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (!doc.exists || doc.data() == null) return 'Usuario';
+      final profile = UserProfile.fromMap(doc.data()!, uid);
+      return profile.name.trim().isNotEmpty ? profile.name : 'Usuario';
+    } catch (_) {
+      return 'Usuario';
+    }
+  }
+
+  Future<void> _handleBuy() async {
+    final product = _product;
+    final uid = _uid;
+    if (product == null || uid == null) return;
+
+    setState(() => _isBuying = true);
+    try {
+      final buyerName = await _fetchBuyerName(uid);
+      await TransactionService.createPurchaseRequest(
+        product: product,
+        buyerId: uid,
+        buyerName: buyerName,
+      );
+      // CAMBIO: ya no hace falta "setState(_alreadyRequested = true)".
+      // En cuanto el documento se crea en Firestore, el stream del
+      // StreamBuilder lo detecta solo y el botón se actualiza.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud enviada al vendedor')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _isBuying = false);
     }
   }
 
@@ -256,17 +322,31 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ],
       ),
+      // CAMBIO: para el comprador, ahora envolvemos _BuyerActionsBar en
+      // un StreamBuilder que escucha _myRequestStream. Cada vez que el
+      // vendedor acepta o rechaza (o el comprador crea una solicitud
+      // nueva), este builder se re-ejecuta solo, sin recargar la página.
       bottomNavigationBar: isOwner
           ? _OwnerActionsBar(
               onEdit: () => context.push('/product/${product.id}/edit'),
               onDelete: () => _confirmDelete(context, product.id),
             )
-          : _BuyerActionsBar(
-              onMessage: () {
-                // TODO: abre el chat con el vendedor.
-              },
-              onBuy: () {
-                // TODO: dispara el flujo de compra/reserva.
+          : StreamBuilder<ProfileTransaction?>(
+              stream: _myRequestStream,
+              builder: (context, reqSnap) {
+                final latest = reqSnap.data;
+                final alreadyRequested =
+                    latest?.status == TransactionStatus.enProceso;
+
+                return _BuyerActionsBar(
+                  isSold: product.status == ProductStatus.vendida,
+                  alreadyRequested: alreadyRequested,
+                  isProcessing: _isBuying,
+                  onMessage: () {
+                    // TODO: abre el chat con el vendedor.
+                  },
+                  onBuy: _handleBuy,
+                );
               },
             ),
     );
@@ -526,13 +606,33 @@ class _SellerCard extends StatelessWidget {
 }
 
 class _BuyerActionsBar extends StatelessWidget {
+  final bool isSold;
+  final bool alreadyRequested;
+  final bool isProcessing;
   final VoidCallback onMessage;
   final VoidCallback onBuy;
 
-  const _BuyerActionsBar({required this.onMessage, required this.onBuy});
+  const _BuyerActionsBar({
+    required this.isSold,
+    required this.alreadyRequested,
+    required this.isProcessing,
+    required this.onMessage,
+    required this.onBuy,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final canBuy = !isSold && !alreadyRequested && !isProcessing;
+
+    String label;
+    if (isSold) {
+      label = 'Producto vendido';
+    } else if (alreadyRequested) {
+      label = 'Solicitud enviada';
+    } else {
+      label = 'Comprar ahora';
+    }
+
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(
@@ -549,7 +649,7 @@ class _BuyerActionsBar extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: onMessage,
+                onPressed: isSold ? null : onMessage,
                 icon: const Icon(Icons.chat_bubble_outline, size: 18),
                 label: const Text('Mensaje'),
                 style: OutlinedButton.styleFrom(
@@ -566,21 +666,31 @@ class _BuyerActionsBar extends StatelessWidget {
             Expanded(
               flex: 2,
               child: ElevatedButton(
-                onPressed: onBuy,
+                onPressed: canBuy ? onBuy : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor:
+                      isSold ? AppColors.textSecondary : AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                 ),
-                child: const Text(
-                  'Comprar ahora',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
           ],

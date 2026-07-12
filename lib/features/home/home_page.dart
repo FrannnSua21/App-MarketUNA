@@ -934,6 +934,14 @@ class _MainDrawer extends StatelessWidget {
                     },
                   ),
                   _DrawerItem(
+  icon: Icons.move_to_inbox_outlined,
+  label: 'Solicitudes de compra',
+  onTap: () {
+    Navigator.pop(context);
+    context.push('/profile/purchase-requests');
+  },
+),
+                  _DrawerItem(
                     icon: Icons.sell_outlined,
                     label: 'Vender',
                     onTap: () {

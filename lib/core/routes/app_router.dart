@@ -19,7 +19,8 @@ import '../../features/product/product_list_page.dart';
 import '../../features/product/product_detail_page.dart';
 import '../../features/product/product_edit_page.dart';
 
-import '../../features/dev/migration_page.dart'; // ajusta la ruta real
+import '../../features/dev/migration_page.dart';
+import '../../features/profile/profile_purchase_requests_page.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -94,6 +95,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/dev-migration',
       builder: (context, state) => const MigrationPage(),
+    ),
+    GoRoute(
+    path: '/profile/purchase-requests',
+    builder: (context, state) => const ProfilePurchaseRequestsPage(),
     ),
   ],
 );
