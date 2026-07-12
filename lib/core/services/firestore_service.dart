@@ -21,23 +21,30 @@ class FirestoreService {
   static Future<void> createUserProfile({
     required String uid,
     required String email,
-    String? name,
-    String? phone, // NUEVO
+    String? firstName,
+    String? lastName,
+    String? phone,
   }) async {
     final now = FieldValue.serverTimestamp();
     await _db.collection('users').doc(uid).set({
-      'name': (name != null && name.trim().isNotEmpty)
-          ? name
+      'firstName': (firstName != null && firstName.trim().isNotEmpty)
+          ? firstName.trim()
           : email.split('@').first,
+      'lastName': lastName?.trim() ?? '',
       'email': email,
-      'phone': phone ?? '', // NUEVO
+      'phone': phone ?? '',
       'avatarUrl': null,
       'bio': '',
       'address': '',
+      'universityCode': '',
+      'career': '',
       'rating': 0.0,
       'ratingCount': 0,
       'totalVentas': 0,
       'totalCompras': 0,
+      'following': 0,
+      'followers': 0,
+      'favoritesCount': 0,
       'memberSince': now,
       'createdAt': now,
       'updatedAt': now,

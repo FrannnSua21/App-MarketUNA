@@ -22,8 +22,6 @@ class AuthProvider extends ChangeNotifier {
   String? get currentEmail => _authRepo.currentUser?.email;
   String? get currentUid => _authRepo.currentUser?.uid;
 
-  /// StreamBuilder-friendly: úsalo en la pantalla de perfil para mostrar
-  /// nombre, rating, totalVentas, totalCompras, etc. en tiempo real.
   Stream<UserProfile?> get userProfileStream {
     final uid = currentUid;
     if (uid == null) return Stream.value(null);
@@ -55,15 +53,13 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// [name] es opcional: si no lo mandas, se usa la parte del correo antes
-  /// de la @ como nombre inicial (el usuario lo puede editar después).
-
-  /// [name] y [phone] son opcionales: si no los mandas, se usa la parte del
-  /// correo antes de la @ como nombre inicial (el usuario lo puede editar después).
+  /// [firstName], [lastName] y [phone] son opcionales: si no los mandas,
+  /// se usa la parte del correo antes de la @ como nombre inicial.
   Future<bool> register(
     String email,
     String password, {
-    String? name,
+    String? firstName,
+    String? lastName,
     String? phone,
   }) async {
     isLoading = true;
@@ -74,11 +70,11 @@ class AuthProvider extends ChangeNotifier {
 
       final uid = _authRepo.currentUser?.uid;
       if (uid != null) {
-        // Crea el documento del usuario en Firestore (users/{uid}).
         await FirestoreService.createUserProfile(
           uid: uid,
           email: email,
-          name: name,
+          firstName: firstName,
+          lastName: lastName,
           phone: phone,
         );
       }
@@ -88,6 +84,7 @@ class AuthProvider extends ChangeNotifier {
       errorMessage = _authRepo.traducirError(e.code);
       return false;
     } catch (e) {
+      // ignore: avoid_print
       print('Error creando perfil en Firestore: $e');
       errorMessage =
           'La cuenta se creó, pero hubo un problema guardando tus datos. '
@@ -99,8 +96,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Solo funciona si ya hay una sesión de Firebase activa en el dispositivo
-  /// (o sea, el usuario ya hizo login normal al menos una vez y no cerró sesión).
   Future<bool> loginWithBiometrics() async {
     if (!isLoggedIn) return false;
     return _biometricService.authenticate(

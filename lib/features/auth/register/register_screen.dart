@@ -41,14 +41,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     final auth = context.read<AuthProvider>();
-    final nombreCompleto =
-        '${_nameController.text.trim()} ${_lastNameController.text.trim()}'
-            .trim();
 
     final success = await auth.register(
       _emailController.text.trim(),
       _passwordController.text.trim(),
-      name: nombreCompleto,
+      firstName: _nameController.text.trim(),
+      lastName: _lastNameController.text.trim(),
       phone: _phoneController.text.trim(),
     );
 

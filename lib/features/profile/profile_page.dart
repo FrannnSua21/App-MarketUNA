@@ -77,16 +77,79 @@ class _ProfilePageState extends State<ProfilePage> {
                   onBack: () => context.pop(),
                   onEditProfile: () => _openEditProfile(user),
                 ),
+
                 Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: responsive.horizontalPadding,
                     vertical: AppSpacing.lg,
                   ),
+
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+
                     children: [
+                      _FieldCardLike(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (user.career.isNotEmpty ||
+                                user.universityCode.isNotEmpty) ...[
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.school_outlined,
+                                    size: 18,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      user.career.isNotEmpty
+                                          ? user.career
+                                          : 'Carrera sin especificar',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                  ),
+                                  if (user.universityCode.isNotEmpty)
+                                    Text(
+                                      'Código: ${user.universityCode}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                            ],
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _MiniStat(
+                                  label: 'Siguiendo',
+                                  value: '${user.following}',
+                                ),
+                                _MiniStat(
+                                  label: 'Seguidores',
+                                  value: '${user.followers}',
+                                ),
+                                _MiniStat(
+                                  label: 'Favoritos',
+                                  value: '${user.favoritesCount}',
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+
                       const SectionLabel('Mi cuenta'),
                       const SizedBox(height: AppSpacing.sm),
+
                       MenuCard(
                         children: [
                           MenuTile(
@@ -423,6 +486,49 @@ class _ProfileHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FieldCardLike extends StatelessWidget {
+  final Widget child;
+  const _FieldCardLike({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  const _MiniStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11.5,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

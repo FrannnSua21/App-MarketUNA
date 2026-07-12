@@ -15,88 +15,145 @@ import '../../../core/theme/app_theme.dart';
 
 /// ---- Usuario (colección `users/{uid}` en Firestore) ---------------------
 
+/// ---- Usuario (colección `users/{uid}` en Firestore) ---------------------
+
 class UserProfile {
   final String id;
-  final String name;
+  final String firstName;
+  final String lastName;
   final String email;
   final String phone;
   final String? avatarUrl;
   final String bio;
   final String address;
+  final String universityCode; // Código universitario, ej: 230494
+  final String career; // Carrera, ej: Ingeniería de Sistemas
+
+  // ---- Campos de solo lectura: el sistema los calcula, el usuario NO
+  // los puede editar desde ProfileEditPage. ----
   final double rating;
   final int ratingCount;
   final int totalVentas;
   final int totalCompras;
+  final int following; // A cuántos sigue
+  final int followers; // Cuántos lo siguen
+  final int favoritesCount;
+
   final DateTime memberSince;
 
   const UserProfile({
     required this.id,
-    required this.name,
+    required this.firstName,
+    required this.lastName,
     required this.email,
     required this.phone,
     this.avatarUrl,
     this.bio = '',
     this.address = '',
+    this.universityCode = '',
+    this.career = '',
     this.rating = 0,
     this.ratingCount = 0,
     this.totalVentas = 0,
     this.totalCompras = 0,
+    this.following = 0,
+    this.followers = 0,
+    this.favoritesCount = 0,
     required this.memberSince,
   });
 
-  String get initials =>
-      name.trim().isNotEmpty ? name.trim().substring(0, 1).toUpperCase() : '?';
+  /// Nombre completo, para no tener que estar concatenando en cada pantalla.
+  String get name => '$firstName $lastName'.trim();
+
+  String get initials {
+    final n = name.trim();
+    return n.isNotEmpty ? n.substring(0, 1).toUpperCase() : '?';
+  }
 
   UserProfile copyWith({
-    String? name,
+    String? firstName,
+    String? lastName,
     String? email,
     String? phone,
     String? avatarUrl,
     String? bio,
     String? address,
+    String? universityCode,
+    String? career,
   }) {
     return UserProfile(
       id: id,
-      name: name ?? this.name,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
       email: email ?? this.email,
       phone: phone ?? this.phone,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       bio: bio ?? this.bio,
       address: address ?? this.address,
+      universityCode: universityCode ?? this.universityCode,
+      career: career ?? this.career,
       rating: rating,
       ratingCount: ratingCount,
       totalVentas: totalVentas,
       totalCompras: totalCompras,
+      following: following,
+      followers: followers,
+      favoritesCount: favoritesCount,
       memberSince: memberSince,
     );
   }
 
-  /// Solo los campos editables por el propio usuario (para `update()`).
+  /// Solo los campos que el propio usuario puede editar (para `update()`).
+  /// NO incluye rating, ratingCount, ventas, compras, following, followers,
+  /// favoritesCount: esos los actualiza el sistema, nunca el usuario.
   Map<String, dynamic> toMap() {
     return {
-      'name': name,
+      'firstName': firstName,
+      'lastName': lastName,
       'email': email,
       'phone': phone,
       'avatarUrl': avatarUrl,
       'bio': bio,
       'address': address,
+      'universityCode': universityCode,
+      'career': career,
     };
   }
 
   factory UserProfile.fromMap(Map<String, dynamic> map, String id) {
     final memberSinceTs = map['memberSince'];
+
+    // Compatibilidad con cuentas viejas que solo tenían el campo 'name'
+    // (antes de separar nombres/apellidos).
+    String firstName = map['firstName'] as String? ?? '';
+    String lastName = map['lastName'] as String? ?? '';
+    if (firstName.isEmpty && lastName.isEmpty) {
+      final legacyName = (map['name'] as String? ?? '').trim();
+      if (legacyName.isNotEmpty) {
+        final parts = legacyName.split(' ');
+        firstName = parts.first;
+        lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      }
+    }
+
     return UserProfile(
       id: id,
-      name: map['name'] as String? ?? '',
+      firstName: firstName,
+      lastName: lastName,
       email: map['email'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
       avatarUrl: map['avatarUrl'] as String?,
       bio: map['bio'] as String? ?? '',
       address: map['address'] as String? ?? '',
+      universityCode: map['universityCode'] as String? ?? '',
+      career: map['career'] as String? ?? '',
       rating: (map['rating'] as num?)?.toDouble() ?? 0,
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       totalVentas: (map['totalVentas'] as num?)?.toInt() ?? 0,
       totalCompras: (map['totalCompras'] as num?)?.toInt() ?? 0,
+      following: (map['following'] as num?)?.toInt() ?? 0,
+      followers: (map['followers'] as num?)?.toInt() ?? 0,
+      favoritesCount: (map['favoritesCount'] as num?)?.toInt() ?? 0,
       memberSince: memberSinceTs is Timestamp
           ? memberSinceTs.toDate()
           : DateTime.now(),
@@ -362,14 +419,21 @@ class MockProfileRepository {
 
   static UserProfile currentUser = UserProfile(
     id: 'u-001',
-    name: 'Invitado',
+    firstName: 'Invitado',
+    lastName: '',
     email: 'invitado@correo.com',
     phone: '+51 987 654 321',
     bio: 'Me encanta encontrar y vender cosas increíbles por acá.',
     address: 'Arequipa, Perú',
+    universityCode: '000000',
+    career: 'Sin especificar',
     rating: 4.8,
+    ratingCount: 15,
     totalVentas: 12,
     totalCompras: 7,
+    following: 8,
+    followers: 20,
+    favoritesCount: 5,
     memberSince: DateTime(2023, 3, 14),
   );
 

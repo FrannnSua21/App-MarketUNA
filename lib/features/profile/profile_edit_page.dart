@@ -8,11 +8,11 @@ import 'widgets/profile_widgets.dart';
 
 /// -----------------------------------------------------------------------
 /// EDITAR PERFIL
-/// Recibe el UserProfile actual por `extra` (ver ProfilePage._openEditProfile).
-/// Por ahora solo el TELÉFONO es editable; el resto de campos se muestran
-/// de solo lectura. Al guardar, escribe directo en Firestore
-/// (users/{uid}) — no hace falta manejar el valor de retorno porque
-/// ProfilePage escucha esos cambios en vivo con un StreamBuilder.
+/// Editable: nombres, apellidos, teléfono, código universitario, carrera,
+/// ubicación, bio.
+/// Solo lectura: correo, calificación, ventas, compras, siguiendo,
+/// seguidores, favoritos — esos los controla el sistema (por ejemplo, el
+/// rating lo dan otros usuarios, nunca uno mismo).
 /// -----------------------------------------------------------------------
 class ProfileEditPage extends StatefulWidget {
   final UserProfile? user;
@@ -27,13 +27,27 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   late final UserProfile _original =
       widget.user ?? MockProfileRepository.currentUser;
 
+  late final _firstNameCtrl = TextEditingController(text: _original.firstName);
+  late final _lastNameCtrl = TextEditingController(text: _original.lastName);
   late final _phoneCtrl = TextEditingController(text: _original.phone);
+  late final _universityCodeCtrl = TextEditingController(
+    text: _original.universityCode,
+  );
+  late final _careerCtrl = TextEditingController(text: _original.career);
+  late final _addressCtrl = TextEditingController(text: _original.address);
+  late final _bioCtrl = TextEditingController(text: _original.bio);
 
   bool _saving = false;
 
   @override
   void dispose() {
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
     _phoneCtrl.dispose();
+    _universityCodeCtrl.dispose();
+    _careerCtrl.dispose();
+    _addressCtrl.dispose();
+    _bioCtrl.dispose();
     super.dispose();
   }
 
@@ -59,26 +73,36 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             children: [
               Center(child: _AvatarPicker(user: _original)),
               const SizedBox(height: AppSpacing.lg),
+
               const SectionLabel('Datos personales'),
               const SizedBox(height: AppSpacing.sm),
               _FieldCard(
                 child: Column(
                   children: [
-                    // Solo lectura: nombre
-                    _ReadOnlyField(
-                      label: 'Nombre completo',
-                      value: _original.name,
+                    _EditField(
+                      controller: _firstNameCtrl,
+                      label: 'Nombres',
                       icon: Icons.person_outline,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Ingresa tus nombres'
+                          : null,
                     ),
                     const _FieldDivider(),
-                    // Solo lectura: correo
+                    _EditField(
+                      controller: _lastNameCtrl,
+                      label: 'Apellidos',
+                      icon: Icons.person_outline,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Ingresa tus apellidos'
+                          : null,
+                    ),
+                    const _FieldDivider(),
                     _ReadOnlyField(
                       label: 'Correo electrónico',
                       value: _original.email,
                       icon: Icons.mail_outline,
                     ),
                     const _FieldDivider(),
-                    // ÚNICO campo editable: teléfono
                     _EditField(
                       controller: _phoneCtrl,
                       label: 'Teléfono',
@@ -89,47 +113,120 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                           : null,
                     ),
                     const _FieldDivider(),
-                    // Solo lectura: ubicación
-                    _ReadOnlyField(
+                    _EditField(
+                      controller: _addressCtrl,
                       label: 'Ubicación',
-                      value: _original.address.isNotEmpty
-                          ? _original.address
-                          : 'Sin especificar',
                       icon: Icons.location_on_outlined,
                     ),
                   ],
                 ),
               ),
+
+              const SizedBox(height: AppSpacing.lg),
+              const SectionLabel('Información académica'),
+              const SizedBox(height: AppSpacing.sm),
+              _FieldCard(
+                child: Column(
+                  children: [
+                    _EditField(
+                      controller: _universityCodeCtrl,
+                      label: 'Código universitario',
+                      icon: Icons.badge_outlined,
+                      keyboardType: TextInputType.number,
+                    ),
+                    const _FieldDivider(),
+                    _EditField(
+                      controller: _careerCtrl,
+                      label: 'Carrera',
+                      icon: Icons.school_outlined,
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: AppSpacing.lg),
               const SectionLabel('Acerca de ti'),
               const SizedBox(height: AppSpacing.sm),
               _FieldCard(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Text(
-                    _original.bio.isNotEmpty
-                        ? _original.bio
-                        : 'Sin descripción',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
+                child: TextFormField(
+                  controller: _bioCtrl,
+                  maxLines: 4,
+                  maxLength: 160,
+                  decoration: const InputDecoration(
+                    hintText: 'Cuéntale a los demás sobre ti…',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
                     ),
                   ),
                 ),
               ),
+
+              const SizedBox(height: AppSpacing.lg),
+              const SectionLabel('Estadísticas (no editables)'),
+              const SizedBox(height: AppSpacing.sm),
+              _FieldCard(
+                child: Column(
+                  children: [
+                    _StatRow(
+                      icon: Icons.star_rounded,
+                      iconColor: const Color(0xFFF59E0B),
+                      label: 'Calificación como vendedor',
+                      value:
+                          '${_original.rating.toStringAsFixed(1)} (${_original.ratingCount} reseñas)',
+                    ),
+                    const _FieldDivider(),
+                    _StatRow(
+                      icon: Icons.sell_outlined,
+                      iconColor: AppColors.primary,
+                      label: 'Ventas',
+                      value: '${_original.totalVentas}',
+                    ),
+                    const _FieldDivider(),
+                    _StatRow(
+                      icon: Icons.shopping_bag_outlined,
+                      iconColor: AppColors.secondary,
+                      label: 'Compras',
+                      value: '${_original.totalCompras}',
+                    ),
+                    const _FieldDivider(),
+                    _StatRow(
+                      icon: Icons.person_add_alt_outlined,
+                      iconColor: AppColors.primary,
+                      label: 'Siguiendo',
+                      value: '${_original.following}',
+                    ),
+                    const _FieldDivider(),
+                    _StatRow(
+                      icon: Icons.people_outline,
+                      iconColor: AppColors.secondary,
+                      label: 'Seguidores',
+                      value: '${_original.followers}',
+                    ),
+                    const _FieldDivider(),
+                    _StatRow(
+                      icon: Icons.favorite_border,
+                      iconColor: AppColors.error,
+                      label: 'Favoritos',
+                      value: '${_original.favoritesCount}',
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: AppSpacing.sm),
               const Text(
-                'Por ahora solo puedes actualizar tu teléfono. El resto de '
-                'datos se muestran únicamente de referencia.',
+                'Tu calificación la ponen otros usuarios luego de comprarte '
+                '— tú no puedes calificarte a ti mismo. Ventas, compras, '
+                'seguidores, siguiendo y favoritos se actualizan '
+                'automáticamente con tu actividad en la app.',
                 style: TextStyle(
                   fontSize: 12.5,
                   color: AppColors.textSecondary,
                   fontStyle: FontStyle.italic,
                 ),
               ),
+
               const SizedBox(height: AppSpacing.xl),
               SizedBox(
                 width: double.infinity,
@@ -175,7 +272,13 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
     try {
       await FirestoreService.updateUserProfile(_original.id, {
+        'firstName': _firstNameCtrl.text.trim(),
+        'lastName': _lastNameCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
+        'universityCode': _universityCodeCtrl.text.trim(),
+        'career': _careerCtrl.text.trim(),
+        'bio': _bioCtrl.text.trim(),
       });
     } catch (e) {
       if (!mounted) return;
@@ -369,8 +472,7 @@ class _EditField extends StatelessWidget {
   }
 }
 
-/// Campo de solo lectura: misma apariencia que _EditField pero
-/// deshabilitado, para mostrar (no editar) nombre, correo, ubicación.
+/// Campo de solo lectura (correo).
 class _ReadOnlyField extends StatelessWidget {
   final String label;
   final String value;
@@ -416,6 +518,54 @@ class _ReadOnlyField extends StatelessWidget {
             ),
           ),
           const Icon(Icons.lock_outline, size: 16, color: AppColors.border),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fila de estadística de solo lectura (rating, ventas, seguidores, etc.)
+class _StatRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  const _StatRow({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 12,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );
