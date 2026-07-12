@@ -20,7 +20,37 @@ class _HomePageState extends State<HomePage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   String _selectedCategory = 'Todos';
 
+  // -----------------------------------------------------------------
+  // FIX + FEATURE: un stream por categoría, cacheado en un Map. Esto
+  // evita que cada rebuild (elegir chip, escribir, RefreshIndicator)
+  // abra una suscripción nueva a Firestore — que era justo lo que
+  // colgaba la pantalla al filtrar por "Tecnología". Además nos deja
+  // mostrar varias secciones (una por categoría) al mismo tiempo sin
+  // multiplicar conexiones cada vez que Flutter reconstruye el árbol.
+  // -----------------------------------------------------------------
+  String? _cachedUid;
+  Stream<UserProfile?>? _profileStream;
+  final Map<String, Stream<List<Product>>> _categoryStreams = {};
+
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  void _ensureStreams(String uid) {
+    // Solo si cambió el usuario logueado (login/logout) se recrea todo.
+    if (_cachedUid != uid || _profileStream == null) {
+      _cachedUid = uid;
+      _profileStream = FirestoreService.watchUserProfile(uid);
+      _categoryStreams.clear();
+    }
+  }
+
+  Stream<List<Product>> _streamForCategory(String category) {
+    return _categoryStreams.putIfAbsent(
+      category,
+      () => FirestoreService.watchFeed(
+        category: category == 'Todos' ? null : category,
+      ),
+    );
+  }
 
   void _onSelectCategoryFromDrawer(String category) {
     setState(() => _selectedCategory = category);
@@ -38,8 +68,10 @@ class _HomePageState extends State<HomePage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    _ensureStreams(uid);
+
     return StreamBuilder<UserProfile?>(
-      stream: FirestoreService.watchUserProfile(uid),
+      stream: _profileStream,
       builder: (context, userSnap) {
         if (userSnap.hasError) {
           // Esto te va a decir EXACTAMENTE qué está fallando (permisos, etc.)
@@ -83,85 +115,225 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: AppSpacing.lg),
                   _SellBanner(onPublish: () => context.push('/publish')),
                   const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Recientes',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => context.push('/search'),
-                        child: const Text(
-                          'Ver todos',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  StreamBuilder<List<Product>>(
-                    stream: FirestoreService.watchFeed(
-                      category: _selectedCategory == 'Todos'
-                          ? null
-                          : _selectedCategory,
-                    ),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (snap.hasError) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Center(child: Text('Error: ${snap.error}')),
-                        );
-                      }
-                      final products = snap.data ?? [];
-                      if (products.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40),
-                          child: Center(
-                            child: Text('Todavía no hay publicaciones'),
-                          ),
-                        );
-                      }
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: products.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: AppSpacing.md,
-                              crossAxisSpacing: AppSpacing.md,
-                              childAspectRatio: 0.68,
-                            ),
-                        itemBuilder: (context, index) {
-                          final product = products[index];
-                          return ProductCard(
-                            product: product,
-                            onTap: () => context.push('/product/${product.id}'),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                  ..._buildContent(),
                   const SizedBox(height: AppSpacing.xl),
                 ],
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  /// "Todos" -> Home seccionado (Recientes + una fila horizontal por
+  /// categoría). Categoría específica -> grid completo de esa categoría.
+  List<Widget> _buildContent() {
+    if (_selectedCategory != 'Todos') {
+      return _buildCategoryGrid(_selectedCategory);
+    }
+
+    final categories = productCategories.where((c) => c != 'Todos').toList();
+    final widgets = <Widget>[
+      _CategorySection(
+        title: 'Recientes',
+        stream: _streamForCategory('Todos'),
+        onSeeAll: () => context.push('/search'),
+        onProductTap: (product) => context.push('/product/${product.id}'),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+    ];
+
+    for (final category in categories) {
+      widgets.add(
+        _CategorySection(
+          title: category,
+          stream: _streamForCategory(category),
+          onSeeAll: () => setState(() => _selectedCategory = category),
+          onProductTap: (product) => context.push('/product/${product.id}'),
+        ),
+      );
+      widgets.add(const SizedBox(height: AppSpacing.lg));
+    }
+
+    return widgets;
+  }
+
+  List<Widget> _buildCategoryGrid(String category) {
+    return [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            category,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _selectedCategory = 'Todos'),
+            child: const Text(
+              'Ver todas las categorías',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.md),
+      StreamBuilder<List<Product>>(
+        stream: _streamForCategory(category),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snap.hasError) {
+            debugPrint('Error cargando categoría: ${snap.error}');
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: Text(
+                  'No se pudo cargar esta categoría. Intenta de nuevo en unos minutos.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            );
+          }
+          final products = snap.data ?? [];
+          if (products.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: Text('Todavía no hay publicaciones en esta categoría'),
+              ),
+            );
+          }
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: products.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: AppSpacing.md,
+              crossAxisSpacing: AppSpacing.md,
+              childAspectRatio: 0.68,
+            ),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return ProductCard(
+                product: product,
+                onTap: () => context.push('/product/${product.id}'),
+              );
+            },
+          );
+        },
+      ),
+    ];
+  }
+}
+
+/// -----------------------------------------------------------------------
+/// SECCIÓN HORIZONTAL DE PRODUCTOS POR CATEGORÍA (usada en el Home cuando
+/// está seleccionado "Todos"). Si la categoría no tiene productos, la
+/// sección simplemente no se dibuja (no rompe el resto del Home).
+/// -----------------------------------------------------------------------
+class _CategorySection extends StatelessWidget {
+  final String title;
+  final Stream<List<Product>> stream;
+  final VoidCallback onSeeAll;
+  final ValueChanged<Product> onProductTap;
+
+  const _CategorySection({
+    required this.title,
+    required this.stream,
+    required this.onSeeAll,
+    required this.onProductTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Product>>(
+      stream: stream,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 40,
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        if (snap.hasError) {
+          // Un error en una sola sección no debe tumbar todo el Home.
+          debugPrint('Error cargando sección "$title": ${snap.error}');
+          return const SizedBox.shrink();
+        }
+        final products = snap.data ?? [];
+        if (products.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onSeeAll,
+                  child: const Text(
+                    'Ver todos',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: 230,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: products.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.md),
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return SizedBox(
+                    width: 150,
+                    child: ProductCard(
+                      product: product,
+                      onTap: () => onProductTap(product),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );
@@ -709,6 +881,22 @@ class _MainDrawer extends StatelessWidget {
                       context.push('/profile/history');
                     },
                   ),
+
+
+
+
+                  _DrawerItem(
+                    icon: Icons.build_outlined,
+                    label: '[DEV] Migración',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/dev-migration');
+                    },
+                  ),
+
+
+
+
                   const Divider(
                     height: AppSpacing.md,
                     indent: AppSpacing.md,

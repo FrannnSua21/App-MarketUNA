@@ -39,7 +39,22 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
   final _searchCtrl = TextEditingController();
   String _query = '';
 
+  // FIX: el stream se cachea aquí y NO se crea dentro de build().
+  // Antes, cada letra escrita en el buscador hacía setState() -> build()
+  // -> se llamaba watchUserTransactions(uid) de nuevo -> Firestore cerraba
+  // la suscripción anterior a medio camino -> pantalla "colgada"
+  // parpadeando. Igual que pasaba en el Home con "Tecnología".
+  String? _cachedUid;
+  Stream<List<ProfileTransaction>>? _transactionsStream;
+
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  void _ensureStream(String uid) {
+    if (_cachedUid != uid || _transactionsStream == null) {
+      _cachedUid = uid;
+      _transactionsStream = FirestoreService.watchUserTransactions(uid);
+    }
+  }
 
   @override
   void dispose() {
@@ -56,6 +71,8 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    _ensureStream(uid);
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -67,13 +84,23 @@ class _ProfileHistoryPageState extends State<ProfileHistoryPage> {
         body: SafeArea(
           top: false,
           child: StreamBuilder<List<ProfileTransaction>>(
-            stream: FirestoreService.watchUserTransactions(uid),
+            stream: _transactionsStream,
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snap.hasError) {
-                return Center(child: Text('Error: ${snap.error}'));
+                debugPrint('Error cargando historial: ${snap.error}');
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'No se pudo cargar tu historial. Intenta de nuevo en unos minutos.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                );
               }
               final all = snap.data ?? [];
 
@@ -240,7 +267,6 @@ class _TransactionTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Imagen real del producto en vez del ícono genérico
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.sm),
               child: transaction.productImageUrl.isNotEmpty

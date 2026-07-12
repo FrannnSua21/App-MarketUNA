@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/services/firestore_service.dart'; // ajusta la ruta real
+import '../profile/models/profile_models.dart'; // NUEVO: para UserProfile/SellerInfo real
 import 'models/product.dart';
 
 /// API key gratuita de https://api.imgbb.com (no pide tarjeta).
@@ -144,6 +145,36 @@ class _ProductEditPageState extends State<ProductEditPage> {
     throw Exception(
       'No se pudo subir la imagen: ${data['error']?['message'] ?? 'error desconocido'}',
     );
+  }
+
+  /// NUEVO: trae el perfil REAL del vendedor (users/{uid}) desde Firestore.
+  /// Antes esto no existía, entonces Product() usaba el SellerInfo() por
+  /// defecto ("Invitado", rating 4.8, 12 ventas) para TODOS los productos
+  /// nuevos, sin importar quién los publicara.
+  Future<SellerInfo> _fetchSellerInfo(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (!doc.exists || doc.data() == null) {
+        debugPrint(
+          'Advertencia: no existe users/$uid, se usa SellerInfo por defecto',
+        );
+        return const SellerInfo();
+      }
+
+      final profile = UserProfile.fromMap(doc.data()!, uid);
+      return SellerInfo(
+        name: profile.name.trim().isNotEmpty ? profile.name : 'Usuario',
+        rating: profile.rating,
+        totalSales: profile.totalVentas,
+      );
+    } catch (e) {
+      debugPrint('Error obteniendo perfil del vendedor: $e');
+      return const SellerInfo();
+    }
   }
 
   @override
@@ -341,6 +372,9 @@ class _ProductEditPageState extends State<ProductEditPage> {
           'imageUrls': urls,
         });
       } else {
+        // NUEVO: traemos el perfil real ANTES de armar el producto.
+        final sellerInfo = await _fetchSellerInfo(uid);
+
         final docRef = FirestoreService.newProductRef();
         final product = Product(
           id: docRef.id,
@@ -353,6 +387,7 @@ class _ProductEditPageState extends State<ProductEditPage> {
           imageUrls: urls,
           description: _descriptionController.text.trim(),
           location: _locationController.text.trim(),
+          seller: sellerInfo, // NUEVO: antes faltaba, por eso salía "Invitado"
         );
 
         final data = product.toMap();

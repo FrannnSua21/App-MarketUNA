@@ -19,6 +19,8 @@ import '../../features/product/product_list_page.dart';
 import '../../features/product/product_detail_page.dart';
 import '../../features/product/product_edit_page.dart';
 
+import '../../features/dev/migration_page.dart'; // ajusta la ruta real
+
 final GoRouter router = GoRouter(
   initialLocation: '/login',
 
@@ -86,6 +88,12 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/publish',
       builder: (context, state) => const ProductEditPage(),
+    ),
+
+    // ... dentro de tu lista de GoRoute:
+    GoRoute(
+      path: '/dev-migration',
+      builder: (context, state) => const MigrationPage(),
     ),
   ],
 );
