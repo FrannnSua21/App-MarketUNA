@@ -14,6 +14,8 @@ class AuthProvider extends ChangeNotifier {
   bool biometricAvailable = false;
   bool biometricEnabled = false;
 
+  String? _lastPassword;
+
   AuthProvider() {
     _checkBiometricStatus();
   }
@@ -39,8 +41,13 @@ class AuthProvider extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
+
       await _authRepo.login(email, password);
+
+      _lastPassword = password;
+
       return true;
+
     } on FirebaseAuthException catch (e) {
       errorMessage = _authRepo.traducirError(e.code);
       return false;
@@ -103,15 +110,53 @@ class AuthProvider extends ChangeNotifier {
     );
   }*/
   Future<bool> loginWithBiometrics() async {
-    return await _biometricService.authenticate(
-     reason: 'Inicia sesión con tu huella digital',
+    // 1. Verificar huella
+    final biometricOk = await _biometricService.authenticate(
+      reason: 'Confirme su identidad',
     );
+
+    if (!biometricOk) {
+      return false;
+    }
+
+    final email = await _biometricService.getBiometricEmail();
+
+    if (email == null) {
+      print("No existe usuario biométrico guardado");
+      return false;
+    }
+
+    print("Usuario biométrico encontrado: $email");
+
+    notifyListeners();
+
+    return true;
   }
 
-  Future<void> enableBiometric() async {
+  /*Future<void> enableBiometric(String password) async {
     final email = currentEmail;
+
     if (email == null) return;
-    await _biometricService.enableBiometric(email);
+
+    await _biometricService.enableBiometric(
+      email,
+      password,
+    );
+
+    biometricEnabled = true;
+    notifyListeners();
+  }*/
+
+  Future<void> enableBiometric() async {
+
+    final email = currentEmail;
+    if (email == null || _lastPassword == null) {
+      return;
+    }
+    await _biometricService.enableBiometric(
+      email,
+      _lastPassword!,
+    );
     biometricEnabled = true;
     notifyListeners();
   }

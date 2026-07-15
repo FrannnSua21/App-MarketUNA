@@ -5,6 +5,9 @@ import '../../core/theme/app_theme.dart';
 import 'models/profile_models.dart';
 import 'widgets/profile_widgets.dart';
 
+import '../../core/services/biometric_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 /// -----------------------------------------------------------------------
 /// PRIVACIDAD Y SEGURIDAD
 /// Cambio de contraseña, preferencias de seguridad, sesiones activas y
@@ -22,16 +25,33 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
   final _currentCtrl = TextEditingController();
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  final BiometricService _biometricService = BiometricService();
 
   bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _biometricEnabled = false;
-  bool _twoFactorEnabled = false;
+  //bool _twoFactorEnabled = false;
   bool _savingPassword = false;
 
   late final List<ActiveSession> _sessions = List.of(MockProfileRepository.activeSessions);
+////
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricStatus();
+  }
+  Future<void> _loadBiometricStatus() async {
+    final enabled = await _biometricService.isBiometricEnabled();
 
+    if (!mounted) return;
+
+    setState(() {
+      _biometricEnabled = enabled;
+    });
+  }
+
+////
   @override
   void dispose() {
     _currentCtrl.dispose();
@@ -123,24 +143,13 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
               children: [
                 MenuTile(
                   icon: Icons.fingerprint,
-                  color: AppColors.primary,
-                  label: 'Inicio de sesión biométrico',
-                  subtitle: 'Usa tu huella o Face ID para entrar',
+                  color: AppColors.success,
+                  label: 'Acceso biométrico',
+                  subtitle: 'Inicia sesión usando tu huella digital',
                   trailing: Switch(
                     value: _biometricEnabled,
                     activeThumbColor: AppColors.primary,
-                    onChanged: (v) => setState(() => _biometricEnabled = v),
-                  ),
-                ),
-                MenuTile(
-                  icon: Icons.verified_user_outlined,
-                  color: AppColors.success,
-                  label: 'Verificación en dos pasos',
-                  subtitle: 'Añade una capa extra de seguridad',
-                  trailing: Switch(
-                    value: _twoFactorEnabled,
-                    activeThumbColor: AppColors.primary,
-                    onChanged: (v) => setState(() => _twoFactorEnabled = v),
+                    onChanged: toggleBiometric,
                   ),
                   isLast: true,
                 ),
@@ -234,6 +243,66 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
     );
   }
 
+////
+  Future<void> toggleBiometric(bool value) async {
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (value) {
+      if (user == null || user.email == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Debe iniciar sesión primero'),
+          ),
+        );
+        return;
+      }
+
+      if (_currentCtrl.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Ingrese su contraseña actual antes de activar la biometría',
+            ),
+          ),
+        );
+        return;
+      }
+
+      await _biometricService.enableBiometric(
+        user.email!,
+        _currentCtrl.text,
+      );
+
+      setState(() {
+        _biometricEnabled = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Inicio biométrico activado'),
+        ),
+      );
+
+    } else {
+
+      await _biometricService.disableBiometric();
+
+      setState(() {
+        _biometricEnabled = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Inicio biométrico desactivado'),
+        ),
+      );
+    }
+  }
+
+
+////
+///
   String _lastActiveLabel(ActiveSession session) {
     if (session.isCurrent) return 'Activa ahora';
     final diff = DateTime.now().difference(session.lastActive);

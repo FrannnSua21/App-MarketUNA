@@ -23,6 +23,7 @@ import '../../features/dev/migration_page.dart';
 import '../../features/profile/profile_purchase_requests_page.dart';
 
 final GoRouter router = GoRouter(
+  //initialLocation: '/login',
   initialLocation: '/login',
 
   routes: [

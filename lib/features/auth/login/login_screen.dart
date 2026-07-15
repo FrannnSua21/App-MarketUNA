@@ -6,6 +6,9 @@ import '../widgets/auth_shared_widgets.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -19,6 +22,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+
+
+  @override
+  void initState() {
+    super.initState();
+
+    print("Usuario Firebase: ${firebase_auth.FirebaseAuth.instance.currentUser}",);
+  }
+
 
   @override
   void dispose() {
@@ -37,6 +49,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text.trim(),
     );
 
+    print("LOGIN NORMAL OK: $success");
+    print("CURRENT USER: ${auth.currentUid}");
+    print("CURRENT EMAIL: ${auth.currentEmail}");
+
     if (!mounted) return;
     setState(() => _isLoading = false);
 
@@ -49,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleBiometricLogin() async {
+  /*Future<void> _handleBiometricLogin() async {
     final auth = context.read<AuthProvider>();
     final ok = await auth.loginWithBiometrics();
     if (!mounted) return;
@@ -58,6 +74,33 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo verificar tu huella')),
+      );
+    }
+  }*/
+  Future<void> _handleBiometricLogin() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.loginWithBiometrics();
+
+    if (!mounted) return;
+
+    print("LOGIN BIOMETRICO OK: $ok");
+
+    if (ok) {
+      /*print("INTENTANDO IR A HOME");
+      context.go('/home');*/
+      print("INTENTANDO IR A HOME");
+
+      try {
+        context.go('/home');
+      } catch (e) {
+        print("ERROR NAVEGANDO: $e");
+      }
+      //endChange
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo verificar tu huella'),
+        ),
       );
     }
   }
