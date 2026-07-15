@@ -96,10 +96,15 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> loginWithBiometrics() async {
+  /*Future<bool> loginWithBiometrics() async {
     if (!isLoggedIn) return false;
     return _biometricService.authenticate(
       reason: 'Inicia sesión con tu huella digital',
+    );
+  }*/
+  Future<bool> loginWithBiometrics() async {
+    return await _biometricService.authenticate(
+     reason: 'Inicia sesión con tu huella digital',
     );
   }
 

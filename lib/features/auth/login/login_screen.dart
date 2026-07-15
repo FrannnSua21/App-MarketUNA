@@ -65,8 +65,10 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final showBiometricButton =
-        auth.biometricAvailable && auth.biometricEnabled && auth.isLoggedIn;
+    /*final showBiometricButton =
+        auth.biometricAvailable && auth.biometricEnabled && auth.isLoggedIn;*/
+    //final showBiometricButton = auth.biometricAvailable && auth.biometricEnabled;
+    final showBiometricButton = auth.biometricAvailable;
 
     return AuthScaffold(
       child: FadeSlideIn(
@@ -93,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Campus Market',
+                      'Market UNAP',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
