@@ -169,6 +169,56 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
 
+///////
+
+                    GlassTextField(
+                      controller: _emailController,
+                      label: 'Correo institucional',
+                      hint: 'usuario@universidad.edu',
+                      icon: Icons.mail_outline,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Ingresa tu correo';
+                        }
+                        if (!value.contains('@')) return 'Correo inválido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    GlassTextField(
+                      controller: _passwordController,
+                      label: 'Contraseña',
+                      hint: '••••••••',
+                      icon: Icons.lock_outline,
+                      obscureText: _obscurePassword,
+                      suffixIcon: IconButton(
+                        icon: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          transitionBuilder: (child, anim) =>
+                              ScaleTransition(scale: anim, child: child),
+                          child: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            key: ValueKey(_obscurePassword),
+                            size: 20,
+                          ),
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Ingresa tu contraseña';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+
                     if (showBiometricButton) ...[
                       Center(
                         child: GestureDetector(
@@ -219,53 +269,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: AppSpacing.lg),
                     ],
 
-                    GlassTextField(
-                      controller: _emailController,
-                      label: 'Correo institucional',
-                      hint: 'usuario@universidad.edu',
-                      icon: Icons.mail_outline,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Ingresa tu correo';
-                        }
-                        if (!value.contains('@')) return 'Correo inválido';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-
-                    GlassTextField(
-                      controller: _passwordController,
-                      label: 'Contraseña',
-                      hint: '••••••••',
-                      icon: Icons.lock_outline,
-                      obscureText: _obscurePassword,
-                      suffixIcon: IconButton(
-                        icon: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          transitionBuilder: (child, anim) =>
-                              ScaleTransition(scale: anim, child: child),
-                          child: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            key: ValueKey(_obscurePassword),
-                            size: 20,
-                          ),
-                        ),
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Ingresa tu contraseña';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
 
                     Align(
                       alignment: Alignment.centerRight,
