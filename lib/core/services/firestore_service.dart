@@ -24,6 +24,7 @@ class FirestoreService {
     String? firstName,
     String? lastName,
     String? phone,
+    String role = 'user',
   }) async {
     final now = FieldValue.serverTimestamp();
     await _db.collection('users').doc(uid).set({
@@ -33,6 +34,10 @@ class FirestoreService {
       'lastName': lastName?.trim() ?? '',
       'email': email,
       'phone': phone ?? '',
+      ///
+      ///
+      'role' : role,
+      
       'avatarUrl': null,
       'bio': '',
       'address': '',
@@ -57,6 +62,23 @@ class FirestoreService {
     return UserProfile.fromMap(snap.data()!, snap.id);
   }
 
+  /// Obtiene el rol del usuario
+  static Future<String> getUserRole(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+
+    if (!doc.exists) {
+      return 'user';
+    }
+
+    final data = doc.data();
+
+    if (data == null) {
+      return 'user';
+    }
+
+    return data['role'] ?? 'user';
+  }
+
   /// Para usar con StreamBuilder en la pantalla de perfil.
   static Stream<UserProfile?> watchUserProfile(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((snap) {
@@ -65,10 +87,13 @@ class FirestoreService {
     });
   }
 
+
+
   static Future<void> updateUserProfile(String uid, Map<String, dynamic> data) {
     data['updatedAt'] = FieldValue.serverTimestamp();
     return _db.collection('users').doc(uid).update(data);
   }
+
 
   // =========================================================================
   // PRODUCTOS  ->  colección `products/{productId}`

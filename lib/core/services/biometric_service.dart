@@ -12,23 +12,12 @@ class BiometricService {
   static const _kBiometricEmailKey = 'biometric_email';
   static const _kBiometricPasswordKey = 'biometric_password';
 
-  /// Indica si el dispositivo soporta biometría y tiene al menos
-  /// una huella/Face ID registrada.
-  /*Future<bool> isDeviceSupported() async {
-    try {
-      final canCheck = await _auth.canCheckBiometrics;
-      final isSupported = await _auth.isDeviceSupported();
-      return canCheck && isSupported;
-    } catch (e) {
-      return false;
-    }
-  }*/
+  
   Future<bool> isDeviceSupported() async {
     try {
       final isSupported = await _auth.isDeviceSupported();
 
-      final biometrics =
-          await _auth.getAvailableBiometrics();
+      final biometrics =  await _auth.getAvailableBiometrics();
 
       print("Soporta biometría: $isSupported");
       print("Biometrías disponibles: $biometrics");
@@ -61,28 +50,33 @@ class BiometricService {
   Future<bool> isBiometricEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_kBiometricEnabledKey) ?? false;
+
   }
+  
 
-  /*Future<void> enableBiometric(String email, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kBiometricEnabledKey, true);
-    await prefs.setString(_kBiometricEmailKey, email);
-  }*/
+  Future<void> enableBiometric( String email, String password,
+  ) async {
 
-  Future<void> enableBiometric(String email, String password) async {
-    final prefs = await SharedPreferences.getInstance();
+      print("GUARDANDO EMAIL: $email");
 
-    // Guardamos que el usuario activó la biometría
-    await prefs.setBool(_kBiometricEnabledKey, true);
+      print("GUARDANDO PASSWORD: $password");
 
-    // Guardamos el correo en preferencias
-    await prefs.setString(_kBiometricEmailKey, email);
+      final prefs = await SharedPreferences.getInstance();
 
-    // Guardamos la contraseña en almacenamiento seguro
-    await _secureStorage.write(
-      key: _kBiometricPasswordKey,
-      value: password,
-    );
+      await prefs.setBool(_kBiometricEnabledKey, true);
+
+      await prefs.setString(
+          _kBiometricEmailKey,
+          email,
+      );
+
+      await _secureStorage.write(
+          key: _kBiometricPasswordKey,
+          value: password,
+      );
+
+      print("GUARDADO FINALIZADO");
+
   }
 
 
@@ -109,16 +103,13 @@ class BiometricService {
     );
   }
 
-  /*Future<bool> authenticate({required String reason}) async {
+  Future<bool> authenticate({
+    required String reason,
+  }) async {
     try {
-      return await _auth.authenticate(localizedReason: reason);
-    } catch (e) {
-      return false;
-    }
-  }*/
 
-  Future<bool> authenticate({required String reason}) async {
-    try {
+      print("=== INICIANDO AUTENTICACIÓN BIOMÉTRICA ===");
+
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
         biometricOnly: true,
@@ -130,7 +121,7 @@ class BiometricService {
       return authenticated;
 
     } catch (e) {
-      print("Error autenticación biométrica: $e");
+      print(e);
       return false;
     }
   }

@@ -57,7 +57,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (success) {
-      context.go('/home');
+      if (auth.isAdmin) {
+        context.go('/admin');
+      } else {
+        context.go('/home');
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(auth.errorMessage ?? 'Error al iniciar sesión')),
@@ -86,16 +90,19 @@ class _LoginScreenState extends State<LoginScreen> {
     print("LOGIN BIOMETRICO OK: $ok");
 
     if (ok) {
-      /*print("INTENTANDO IR A HOME");
-      context.go('/home');*/
-      print("INTENTANDO IR A HOME");
+      print("ROL DEL USUARIO: ${auth.role}");
 
       try {
-        context.go('/home');
+        if (auth.isAdmin) {
+          print("NAVEGANDO AL PANEL ADMIN");
+          context.go('/admin');
+        } else {
+          print("NAVEGANDO AL HOME");
+          context.go('/home');
+        }
       } catch (e) {
         print("ERROR NAVEGANDO: $e");
       }
-      //endChange
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

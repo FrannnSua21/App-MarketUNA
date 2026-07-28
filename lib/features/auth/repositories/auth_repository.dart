@@ -9,6 +9,18 @@ class AuthRepository {
     await _auth.signInWithEmailAndPassword(email: email, password: password);
   }
 
+  Future<void> loginWithCredentials(
+    String email,
+    String password,
+  ) async {
+
+    await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+  }
+
   Future<void> register(String email, String password) async {
     await _auth.createUserWithEmailAndPassword(
       email: email,

@@ -14,7 +14,9 @@ class AuthProvider extends ChangeNotifier {
   bool biometricAvailable = false;
   bool biometricEnabled = false;
 
+
   String? _lastPassword;
+  String _role = "user";
 
   AuthProvider() {
     _checkBiometricStatus();
@@ -23,6 +25,10 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggedIn => _authRepo.currentUser != null;
   String? get currentEmail => _authRepo.currentUser?.email;
   String? get currentUid => _authRepo.currentUser?.uid;
+
+  String get role => _role;
+
+  bool get isAdmin => _role == "admin";
 
   Stream<UserProfile?> get userProfileStream {
     final uid = currentUid;
@@ -40,11 +46,20 @@ class AuthProvider extends ChangeNotifier {
     isLoading = true;
     errorMessage = null;
     notifyListeners();
+
     try {
 
       await _authRepo.login(email, password);
 
       _lastPassword = password;
+
+      final user = _authRepo.currentUser;
+
+      if (user != null) {
+        _role = await FirestoreService.getUserRole(user.uid);
+
+        print("ROL DEL USUARIO: $_role");
+      }
 
       return true;
 
@@ -59,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
 
   /// [firstName], [lastName] y [phone] son opcionales: si no los mandas,
   /// se usa la parte del correo antes de la @ como nombre inicial.
@@ -83,6 +99,7 @@ class AuthProvider extends ChangeNotifier {
           firstName: firstName,
           lastName: lastName,
           phone: phone,
+          role: 'user',
         );
       }
 
@@ -103,50 +120,55 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /*Future<bool> loginWithBiometrics() async {
-    if (!isLoggedIn) return false;
-    return _biometricService.authenticate(
-      reason: 'Inicia sesión con tu huella digital',
-    );
-  }*/
+  /*Future<bool> loginWithBiometrics*/
   Future<bool> loginWithBiometrics() async {
-    // 1. Verificar huella
-    final biometricOk = await _biometricService.authenticate(
-      reason: 'Confirme su identidad',
-    );
-
-    if (!biometricOk) {
-      return false;
-    }
-
-    final email = await _biometricService.getBiometricEmail();
-
-    if (email == null) {
-      print("No existe usuario biométrico guardado");
-      return false;
-    }
-
-    print("Usuario biométrico encontrado: $email");
-
+    isLoading = true;
     notifyListeners();
 
-    return true;
+    try {
+      final biometricOk = await _biometricService.authenticate(
+        reason: 'Confirme su identidad',
+      );
+
+      if (!biometricOk) {
+        return false;
+      }
+
+      final email = await _biometricService.getBiometricEmail();
+      final password = await _biometricService.getBiometricPassword();
+
+      if (email == null || password == null) {
+        print("No existen credenciales biométricas");
+        return false;
+      }
+
+      await _authRepo.login(email, password);
+
+      _lastPassword = password;
+
+      final user = _authRepo.currentUser;
+
+      if (user == null) {
+        return false;
+      }
+
+      _role = await FirestoreService.getUserRole(user.uid);
+
+      print("ROL: $_role");
+
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      print("ERROR LOGIN BIOMÉTRICO: $e");
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
-  /*Future<void> enableBiometric(String password) async {
-    final email = currentEmail;
-
-    if (email == null) return;
-
-    await _biometricService.enableBiometric(
-      email,
-      password,
-    );
-
-    biometricEnabled = true;
-    notifyListeners();
-  }*/
-
+  /*Future<void> enableBiometric*/
   Future<void> enableBiometric() async {
 
     final email = currentEmail;
@@ -170,5 +192,26 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _authRepo.logout();
     notifyListeners();
+  }
+
+  Future<bool> verifyPassword(String password) async {
+    final email = currentEmail;
+
+    if (email == null) {
+      return false;
+    }
+
+    try {
+      await _authRepo.login(email, password);
+
+      _lastPassword = password;
+
+      return true;
+    } on FirebaseAuthException {
+      return false;
+    } catch (e) {
+      print("Error verificando contraseña: $e");
+      return false;
+    }
   }
 }

@@ -6,8 +6,9 @@ import 'models/profile_models.dart';
 import 'widgets/profile_widgets.dart';
 
 import '../../core/services/biometric_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import '../auth/providers/auth_provider.dart';
+import 'package:provider/provider.dart';
 /// -----------------------------------------------------------------------
 /// PRIVACIDAD Y SEGURIDAD
 /// Cambio de contraseña, preferencias de seguridad, sesiones activas y
@@ -49,6 +50,42 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
     setState(() {
       _biometricEnabled = enabled;
     });
+  }
+
+  Future<String?> _askCurrentPassword() async {
+    final controller = TextEditingController();
+
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text("Confirmar identidad"),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: "Contraseña actual",
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  controller.text.trim(),
+                );
+              },
+              child: const Text("Continuar"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
 ////
@@ -245,8 +282,9 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
 
 ////
   Future<void> toggleBiometric(bool value) async {
+    final auth = context.read<AuthProvider>();
 
-    final user = FirebaseAuth.instance.currentUser;
+    final user = firebase_auth.FirebaseAuth.instance.currentUser;
 
     if (value) {
       if (user == null || user.email == null) {
@@ -258,21 +296,46 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
         return;
       }
 
-      if (_currentCtrl.text.isEmpty) {
+      final password = await _showPasswordDialog();
+
+      if (password == null || password.isEmpty){
+        return;
+      }
+
+      // Verificar contraseña en Firebase
+      final passwordOk = await auth.verifyPassword(password);
+
+      if (!passwordOk) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Ingrese su contraseña actual antes de activar la biometría',
+              'La contraseña es incorrecta',
             ),
           ),
         );
         return;
       }
 
+      // Solicitar huella
+      final biometricOk =
+          await _biometricService.authenticate(
+        reason: 'Confirme su identidad',
+      );
+
+      if (!biometricOk) {
+        return;
+      }
+////////////
+      print("EMAIL: ${user.email}");
+      print("PASSWORD: $password");
+///////////
+      // Guardar credenciales
       await _biometricService.enableBiometric(
         user.email!,
-        _currentCtrl.text,
+        password,
       );
+
+      print("BIOMETRIA GUARDADA");
 
       setState(() {
         _biometricEnabled = true;
@@ -280,7 +343,9 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Inicio biométrico activado'),
+          content: Text(
+            'Acceso biométrico activado correctamente',
+          ),
         ),
       );
 
@@ -294,10 +359,58 @@ class _ProfileSecurityPageState extends State<ProfileSecurityPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Inicio biométrico desactivado'),
+          content: Text(
+            'Acceso biométrico desactivado',
+          ),
         ),
       );
     }
+  }
+
+  Future<String?> _showPasswordDialog() async {
+    final controller = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Activar biometría"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Por seguridad ingresa tu contraseña actual.",
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "Contraseña",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  controller.text.trim(),
+                );
+              },
+              child: const Text("Aceptar"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
 
