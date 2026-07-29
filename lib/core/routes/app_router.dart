@@ -4,7 +4,10 @@ import '../../features/auth/login/login_screen.dart';
 import '../../features/auth/register/register_screen.dart';
 import '../../features/auth/recover_password/recover_password_screen.dart';
 
+import '../../features/admin/admin_dashboard.dart';
+
 import '../../features/home/home_page.dart';
+
 
 import '../../features/profile/profile_page.dart';
 import '../../features/profile/profile_edit_page.dart';
@@ -36,6 +39,9 @@ final GoRouter router = GoRouter(
       path: '/recover-password',
       builder: (context, state) => const RecoverPasswordScreen(),
     ),
+
+    GoRoute(path: '/admin', builder: (_, __) => const AdminDashboard(),),
+
     GoRoute(path: '/home', builder: (context, state) => const HomePage()),
 
     // ---- Feature "profile" ----
