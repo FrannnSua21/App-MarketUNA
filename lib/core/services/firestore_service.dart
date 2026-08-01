@@ -37,6 +37,7 @@ class FirestoreService {
       ///
       ///
       'role' : role,
+      'active':true,
       
       'avatarUrl': null,
       'bio': '',
@@ -102,6 +103,20 @@ class FirestoreService {
   static Future<void> updateUserProfile(String uid, Map<String, dynamic> data) {
     data['updatedAt'] = FieldValue.serverTimestamp();
     return _db.collection('users').doc(uid).update(data);
+  }
+
+  static Future<void> updateUserStatus(
+    String uid,
+    bool active,
+  ) async {
+
+    await _db
+        .collection('users')
+        .doc(uid)
+        .update({
+          'active': active,
+        });
+
   }
 
  /* static Future<void> updateUserRole(

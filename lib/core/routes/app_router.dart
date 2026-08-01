@@ -26,6 +26,7 @@ import '../../features/dev/migration_page.dart';
 import '../../features/profile/profile_purchase_requests_page.dart';
 import 'package:flutter_application_1/features/admin/user_page.dart';
 import '../../features/admin/user_page.dart';
+import '../../features/admin/user_detail_page.dart';
 
 final GoRouter router = GoRouter(
   //initialLocation: '/login',
@@ -41,12 +42,27 @@ final GoRouter router = GoRouter(
       path: '/recover-password',
       builder: (context, state) => const RecoverPasswordScreen(),
     ),
-
+    
+    
+    // -----ADMIN-----
     GoRoute(path: '/admin', builder: (_, __) => const AdminDashboard(),),
 
     GoRoute(path: '/admin/users',builder: (context, state) => const UsersPage(),),
 
+    GoRoute(
+      path: '/admin/user',
+      builder: (context, state) {
+
+        final user = state.extra as UserProfile;
+
+        return UserDetailPage(
+          user: user,
+        );
+      },
+    ),
+
     GoRoute(path: '/home', builder: (context, state) => const HomePage()),
+
 
     // ---- Feature "profile" ----
     GoRoute(path: '/profile', builder: (context, state) => const ProfilePage()),

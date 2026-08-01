@@ -29,6 +29,7 @@ class UserProfile {
   final String universityCode; // Código universitario, ej: 230494
   final String career; // Carrera, ej: Ingeniería de Sistemas
   final String role;
+  final bool active;
 
   // ---- Campos de solo lectura: el sistema los calcula, el usuario NO
   // los puede editar desde ProfileEditPage. ----
@@ -62,6 +63,7 @@ class UserProfile {
     this.followers = 0,
     this.favoritesCount = 0,
     required this.memberSince,
+    this.active = true,
   });
 
   /// Nombre completo, para no tener que estar concatenando en cada pantalla.
@@ -83,6 +85,7 @@ class UserProfile {
     String? universityCode,
     String? career,
     String? role,
+    bool? active,
   }) {
     return UserProfile(
       id: id,
@@ -104,6 +107,7 @@ class UserProfile {
       followers: followers,
       favoritesCount: favoritesCount,
       memberSince: memberSince,
+      active: active ?? this.active,
     );
   }
 
@@ -152,6 +156,7 @@ class UserProfile {
       universityCode: map['universityCode'] as String? ?? '',
       career: map['career'] as String? ?? '',
       role: map['role'] ?? 'user',
+      active: map['active'] ?? true,
       rating: (map['rating'] as num?)?.toDouble() ?? 0,
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       totalVentas: (map['totalVentas'] as num?)?.toInt() ?? 0,

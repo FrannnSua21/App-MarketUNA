@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'package:go_router/go_router.dart';
 import '../../core/services/firestore_service.dart';
 import '../profile/models/profile_models.dart';
 import '../auth/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import 'widgets/user_card.dart';
 
 
 class UsersPage extends StatelessWidget {
@@ -45,93 +47,39 @@ class UsersPage extends StatelessWidget {
 
               final user = users[index];
 
-              return Card(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 15,
-                  vertical: 8,
-                ),
-                child: ListTile(
+              return UserCard(
+                user: user,
 
-                  leading: CircleAvatar(
-                    child: Text(
-                      user.firstName.isEmpty
-                          ? "?"
-                          : user.firstName[0],
-                    ),
-                  ),
+                onChangeRole: () async {
 
-                  title: Text(
-                    "${user.firstName} ${user.lastName}",
-                  ),
+                  final newRole =
+                      user.role == "admin"
+                          ? "user"
+                          : "admin";
 
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                  await FirestoreService.updateUserRole(
+                    user.id,
+                    newRole,
+                  );
+                },
 
-                      Text(user.email),
+                onToggleStatus: () async {
 
-                      const SizedBox(height: 4),
+                  await FirestoreService.updateUserStatus(
+                    user.id,
+                    !user.active,
+                  );
 
-                      Chip(
-                        label: Text(
-                          user.role.toUpperCase(),
-                        ),
-                      ),
+                },
 
-                    ],
-                  ),
+                onViewProfile: () {
 
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) async {
+                  context.push(
+                    '/admin/user',
+                    extra: user,
+                  );
 
-                      if (value == "role") {
-
-                        final newRole =
-                            user.role == "admin"
-                                ? "user"
-                                : "admin";
-
-                        final auth = context.read<AuthProvider>();
-
-                        if (user.id == auth.currentUid) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "No puedes cambiar tu propio rol.",
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-
-                        await FirestoreService.updateUserRole(
-                          user.id,
-                          newRole,
-                        );
-
-
-
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Rol cambiado a $newRole",
-                            ),
-                          ),
-                        );
-                      }
-
-                    },
-                    itemBuilder: (_) => [
-
-                      const PopupMenuItem(
-                        value: "role",
-                        child: Text("Cambiar rol"),
-                      ),
-
-                    ],
-                  ),
-                ),
+                },
               );
             },
           );
