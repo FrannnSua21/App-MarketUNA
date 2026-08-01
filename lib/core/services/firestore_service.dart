@@ -119,25 +119,6 @@ class FirestoreService {
 
   }
 
- /* static Future<void> updateUserRole(
-    String uid,
-    String role,
-  ) async {
-
-    print("CAMBIANDO ROL");
-    print(uid);
-    print(role);
-
-    await _db
-        .collection('users')
-        .doc(uid)
-        .update({
-          'role': role,
-        });
-
-    print("ROL ACTUALIZADO");
-  }*/
-
   static Future<void> updateUserRole(
     String uid,
     String role,
@@ -189,6 +170,19 @@ class FirestoreService {
         );
   }
 
+  /// Todos los productos (para el panel del administrador).
+  static Stream<List<Product>> watchAllProducts() {
+    return _db
+        .collection('products')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((d) => Product.fromMap(d.data(), d.id))
+              .toList(),
+        );
+  }
+
   /// Feed general (home / búsqueda), solo productos activos.
   static Stream<List<Product>> watchFeed({String? category}) {
     Query<Map<String, dynamic>> query = _db
@@ -223,8 +217,15 @@ class FirestoreService {
     });
   }
 
-  static Future<void> deleteProduct(String id) {
+  /*static Future<void> deleteProduct(String id) {
     return _db.collection('products').doc(id).delete();
+  }*/
+
+  static Future<void> deleteProduct(String productId) async {
+    await _db
+        .collection('products')
+        .doc(productId)
+        .delete();
   }
 
   // =========================================================================

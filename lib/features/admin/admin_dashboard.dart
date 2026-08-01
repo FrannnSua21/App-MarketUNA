@@ -89,7 +89,9 @@ class AdminDashboard extends StatelessWidget {
                     context,
                     Icons.shopping_bag_outlined,
                     "Productos",
-                    () {},
+                    () {
+                      context.push('/admin/products');
+                    },
                   ),
                   _buildCard(
                     context,
