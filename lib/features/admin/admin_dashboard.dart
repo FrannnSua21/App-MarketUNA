@@ -1,75 +1,125 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../auth/providers/auth_provider.dart';
+import '../../core/theme/app_theme.dart';
+import 'package:go_router/go_router.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Panel de Administración"),
+        centerTitle: true,
       ),
-      body: GridView.count(
-        crossAxisCount: 2,
+      body: Padding(
         padding: const EdgeInsets.all(20),
-        crossAxisSpacing: 20,
-        mainAxisSpacing: 20,
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// Bienvenida
+            Text(
+              "Bienvenido",
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
 
-          _adminCard(
-            context,
-            Icons.people,
-            "Usuarios",
-            () {
-              // Ir a la pantalla de usuarios
-            },
-          ),
+            const SizedBox(height: 8),
 
-          _adminCard(
-            context,
-            Icons.inventory,
-            "Productos",
-            () {
-              // Ir a la pantalla de productos
-            },
-          ),
+            Text(
+              "${auth.profile?.firstName ?? ""} ${auth.profile?.lastName ?? ""}",
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
 
-          _adminCard(
-            context,
-            Icons.shopping_cart,
-            "Ventas",
-            () {
-              // Ir a la pantalla de ventas
-            },
-          ),
+            const SizedBox(height: 5),
 
-          _adminCard(
-            context,
-            Icons.report,
-            "Reportes",
-            () {
-              // Ir a la pantalla de reportes
-            },
-          ),
+            Text(
+              auth.currentEmail ?? "",
+              style: const TextStyle(
+                fontSize: 15,
+                color: Colors.grey,
+              ),
+            ),
 
-          _adminCard(
-            context,
-            Icons.settings,
-            "Configuración",
-            () {
-              // Ir a configuración
-            },
-          ),
+            const SizedBox(height: 8),
 
-          _adminCard(
-            context,
-            Icons.logout,
-            "Cerrar sesión",
-            () async {
-              // cerrar sesión
-            },
-          ),
-        ],
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                //color: AppColors.primary.withOpacity(0.15),
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                auth.role.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 18,
+                mainAxisSpacing: 18,
+                childAspectRatio: 1.05,
+                children: [
+                  _buildCard(
+                    context,
+                    Icons.people_alt_outlined,
+                    "Usuarios",
+                    () {
+                      context.go('/admin/users');
+                    },
+                  ),
+                  _buildCard(
+                    context,
+                    Icons.shopping_bag_outlined,
+                    "Productos",
+                    () {},
+                  ),
+                  _buildCard(
+                    context,
+                    Icons.bar_chart_outlined,
+                    "Reportes",
+                    () {},
+                  ),
+                  _buildCard(
+                    context,
+                    Icons.category_outlined,
+                    "Categorías",
+                    () {},
+                  ),
+                  _buildCard(
+                    context,
+                    Icons.analytics_outlined,
+                    "Estadísticas",
+                    () {},
+                  ),
+                  _buildCard(
+                    context,
+                    Icons.settings_outlined,
+                    "Configuración",
+                    () {},
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -112,4 +162,47 @@ class AdminDashboard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildCard(
+    BuildContext context,
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      color: AppColors.primary,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: Colors.white,
+                size: 45,
+              ),
+              const SizedBox(height: 15),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 }

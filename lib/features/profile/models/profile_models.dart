@@ -28,6 +28,7 @@ class UserProfile {
   final String address;
   final String universityCode; // Código universitario, ej: 230494
   final String career; // Carrera, ej: Ingeniería de Sistemas
+  final String role;
 
   // ---- Campos de solo lectura: el sistema los calcula, el usuario NO
   // los puede editar desde ProfileEditPage. ----
@@ -52,6 +53,7 @@ class UserProfile {
     this.address = '',
     this.universityCode = '',
     this.career = '',
+    required this.role,
     this.rating = 0,
     this.ratingCount = 0,
     this.totalVentas = 0,
@@ -80,6 +82,7 @@ class UserProfile {
     String? address,
     String? universityCode,
     String? career,
+    String? role,
   }) {
     return UserProfile(
       id: id,
@@ -92,6 +95,7 @@ class UserProfile {
       address: address ?? this.address,
       universityCode: universityCode ?? this.universityCode,
       career: career ?? this.career,
+      role: role ?? this.role,
       rating: rating,
       ratingCount: ratingCount,
       totalVentas: totalVentas,
@@ -147,6 +151,7 @@ class UserProfile {
       address: map['address'] as String? ?? '',
       universityCode: map['universityCode'] as String? ?? '',
       career: map['career'] as String? ?? '',
+      role: map['role'] ?? 'user',
       rating: (map['rating'] as num?)?.toDouble() ?? 0,
       ratingCount: (map['ratingCount'] as num?)?.toInt() ?? 0,
       totalVentas: (map['totalVentas'] as num?)?.toInt() ?? 0,
@@ -427,6 +432,7 @@ class MockProfileRepository {
     address: 'Arequipa, Perú',
     universityCode: '000000',
     career: 'Sin especificar',
+    role: 'user',
     rating: 4.8,
     ratingCount: 15,
     totalVentas: 12,

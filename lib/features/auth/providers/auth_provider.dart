@@ -17,6 +17,7 @@ class AuthProvider extends ChangeNotifier {
 
   String? _lastPassword;
   String _role = "user";
+  UserProfile? _profile;
 
   AuthProvider() {
     _checkBiometricStatus();
@@ -27,6 +28,8 @@ class AuthProvider extends ChangeNotifier {
   String? get currentUid => _authRepo.currentUser?.uid;
 
   String get role => _role;
+
+  UserProfile? get profile => _profile;
 
   bool get isAdmin => _role == "admin";
 
@@ -58,7 +61,10 @@ class AuthProvider extends ChangeNotifier {
       if (user != null) {
         _role = await FirestoreService.getUserRole(user.uid);
 
-        print("ROL DEL USUARIO: $_role");
+        _profile = await FirestoreService.getUserProfile(user.uid);
+
+        print("ROL: $_role");
+        print("USUARIO: ${_profile?.firstName}");
       }
 
       return true;
@@ -156,9 +162,12 @@ class AuthProvider extends ChangeNotifier {
 
       print("ROL: $_role");
 
+      _profile = await FirestoreService.getUserProfile(user.uid);
+
       notifyListeners();
 
       return true;
+
     } catch (e) {
       print("ERROR LOGIN BIOMÉTRICO: $e");
       return false;
@@ -191,6 +200,11 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     await _authRepo.logout();
+
+    _profile = null;
+    _role = "user";
+    _lastPassword = null;
+
     notifyListeners();
   }
 

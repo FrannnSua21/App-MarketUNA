@@ -24,6 +24,8 @@ import '../../features/product/product_edit_page.dart';
 
 import '../../features/dev/migration_page.dart';
 import '../../features/profile/profile_purchase_requests_page.dart';
+import 'package:flutter_application_1/features/admin/user_page.dart';
+import '../../features/admin/user_page.dart';
 
 final GoRouter router = GoRouter(
   //initialLocation: '/login',
@@ -41,6 +43,8 @@ final GoRouter router = GoRouter(
     ),
 
     GoRoute(path: '/admin', builder: (_, __) => const AdminDashboard(),),
+
+    GoRoute(path: '/admin/users',builder: (context, state) => const UsersPage(),),
 
     GoRoute(path: '/home', builder: (context, state) => const HomePage()),
 

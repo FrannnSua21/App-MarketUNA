@@ -87,11 +87,57 @@ class FirestoreService {
     });
   }
 
-
+  static Stream<List<UserProfile>> watchAllUsers() {
+    return _db
+        .collection('users')
+        .orderBy('firstName')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => UserProfile.fromMap(doc.data(), doc.id))
+              .toList(),
+        );
+  }
 
   static Future<void> updateUserProfile(String uid, Map<String, dynamic> data) {
     data['updatedAt'] = FieldValue.serverTimestamp();
     return _db.collection('users').doc(uid).update(data);
+  }
+
+ /* static Future<void> updateUserRole(
+    String uid,
+    String role,
+  ) async {
+
+    print("CAMBIANDO ROL");
+    print(uid);
+    print(role);
+
+    await _db
+        .collection('users')
+        .doc(uid)
+        .update({
+          'role': role,
+        });
+
+    print("ROL ACTUALIZADO");
+  }*/
+
+  static Future<void> updateUserRole(
+    String uid,
+    String role,
+  ) async {
+    print("=== CAMBIANDO ROL ===");
+    print("UID: $uid");
+    print("Nuevo rol: $role");
+
+    await _db.collection('users').doc(uid).update({
+      'role': role,
+    });
+
+    final doc = await _db.collection('users').doc(uid).get();
+
+    print("ROL EN FIRESTORE: ${doc.data()?['role']}");
   }
 
 
