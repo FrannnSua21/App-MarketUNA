@@ -12,7 +12,13 @@ import 'widgets/product_card.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
-  const ProductDetailPage({super.key, required this.productId});
+  final bool isAdminView;
+
+  const ProductDetailPage({
+    super.key,
+    required this.productId,
+    this.isAdminView = false,
+  });
 
   @override
   State<ProductDetailPage> createState() => _ProductDetailPageState();

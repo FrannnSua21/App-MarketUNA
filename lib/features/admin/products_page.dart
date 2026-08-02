@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/firestore_service.dart';
 import '../product/models/product.dart';
+import '../product/product_edit_page.dart';
+import '../product/product_detail_page.dart';
 
 class ProductsPage extends StatelessWidget {
   const ProductsPage({super.key});
@@ -86,6 +88,35 @@ class ProductsPage extends StatelessWidget {
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) async {
 
+                      if (value == "view") {
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailPage(
+                              productId: product.id,
+                              isAdminView: true,
+                            ),
+                          ),
+                        );
+
+                        return;
+                      }
+
+                      if (value == "edit") {
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ProductEditPage(
+                              productId: product.id,
+                            ),
+                          ),
+                        );
+
+                        return;
+                      }
+
                       if (value == "delete") {
 
                         final confirm = await showDialog<bool>(
@@ -93,20 +124,20 @@ class ProductsPage extends StatelessWidget {
                           builder: (_) => AlertDialog(
                             title: const Text("Eliminar producto"),
                             content: const Text(
-                              "¿Está seguro de eliminar este producto?"
+                              "¿Está seguro de eliminar este producto?",
                             ),
                             actions: [
 
                               TextButton(
-                                onPressed: (){
-                                  Navigator.pop(context,false);
+                                onPressed: () {
+                                  Navigator.pop(context, false);
                                 },
                                 child: const Text("Cancelar"),
                               ),
 
                               ElevatedButton(
-                                onPressed: (){
-                                  Navigator.pop(context,true);
+                                onPressed: () {
+                                  Navigator.pop(context, true);
                                 },
                                 child: const Text("Eliminar"),
                               ),
@@ -115,11 +146,9 @@ class ProductsPage extends StatelessWidget {
                           ),
                         );
 
-                        if(confirm==true){
+                        if (confirm == true) {
 
-                          await FirestoreService.deleteProduct(
-                            product.id,
-                          );
+                          await FirestoreService.deleteProduct(product.id);
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(

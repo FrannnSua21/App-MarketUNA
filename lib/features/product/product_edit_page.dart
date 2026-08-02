@@ -12,6 +12,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/services/firestore_service.dart'; // ajusta la ruta real
 import '../profile/models/profile_models.dart'; // NUEVO: para UserProfile/SellerInfo real
 import 'models/product.dart';
+import '../category/models/category.dart';
 
 /// API key gratuita de https://api.imgbb.com (no pide tarjeta).
 const String _imgbbApiKey = 'cc88c73fafa9ce4a884d123dea16157e';
@@ -36,23 +37,44 @@ class _ProductEditPageState extends State<ProductEditPage> {
 
   /// Cada elemento es String (url ya subida) o File (foto local sin subir).
   List<dynamic> _images = [];
-  String _category = productCategories.firstWhere((c) => c != 'Todos');
+  String _category = "";//productCategories.firstWhere((c) => c != 'Todos');
   ProductCondition _condition = ProductCondition.buenEstado;
 
   bool _isSaving = false;
   bool _isLoadingProduct = true;
   Product? _existingProduct;
-
+  List<Category> _categories = [];
   bool get _isEditing => widget.productId != null;
 
   @override
   void initState() {
     super.initState();
+
     _titleController = TextEditingController();
     _priceController = TextEditingController();
     _descriptionController = TextEditingController();
-    _locationController = TextEditingController(text: 'Arequipa, Perú');
+    _locationController = TextEditingController(
+      text: 'Arequipa, Perú',
+    );
+
+    _loadCategories();   // ← NUEVO
+
     _loadIfEditing();
+  }
+
+  Future<void> _loadCategories() async {
+
+    _categories =
+        await FirestoreService.getAllCategories();
+
+    if (_categories.isNotEmpty && _category.isEmpty) {
+      _category = _categories.first.name;
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+
   }
 
   Future<void> _loadIfEditing() async {
@@ -247,7 +269,12 @@ class _ProductEditPageState extends State<ProductEditPage> {
                   const SizedBox(height: AppSpacing.sm),
                   _CategoryDropdown(
                     value: _category,
-                    onChanged: (v) => setState(() => _category = v),
+                    categories: _categories,
+                    onChanged: (v) {
+                      setState(() {
+                        _category = v;
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.md),
                   const _FieldLabel('Estado del producto'),
@@ -487,13 +514,24 @@ class _FormTextField extends StatelessWidget {
 }
 
 class _CategoryDropdown extends StatelessWidget {
+
   final String value;
+  final List<Category> categories;
   final ValueChanged<String> onChanged;
-  const _CategoryDropdown({required this.value, required this.onChanged});
+
+  const _CategoryDropdown({
+    super.key,
+    required this.value,
+    required this.categories,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final options = productCategories.where((c) => c != 'Todos').toList();
+    final options = categories
+      .where((c) => c.active)
+      .map((c) => c.name)
+      .toList();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -503,7 +541,11 @@ class _CategoryDropdown extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: options.contains(value) ? value : options.first,
+          value: options.isEmpty
+            ? null
+            : (options.contains(value)
+                ? value
+                : options.first),
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded),
           style: const TextStyle(fontSize: 14.5, color: AppColors.textPrimary),

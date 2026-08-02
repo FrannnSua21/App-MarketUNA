@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../features/profile/models/profile_models.dart';
 import '../../features/product/models/product.dart';
 import '../../features/product/models/product_review.dart';
+import '../../features/category/models/category.dart';
 
 /// -----------------------------------------------------------------------
 /// TODO lo de Firestore en un solo lugar, con funciones directas
@@ -226,6 +227,85 @@ class FirestoreService {
         .collection('products')
         .doc(productId)
         .delete();
+  }
+
+//============================================================================
+//
+//CATEGORIES
+//============================================================================
+
+  static Stream<List<Category>> watchAllCategories() {
+    return _db
+        .collection('categories')
+        .orderBy('name')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => Category.fromMap(
+                  doc.data(),
+                  doc.id,
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  static Future<void> createCategory(Category category) async {
+    await _db.collection('categories').add({
+      ...category.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> updateCategory(
+      String id,
+      Map<String, dynamic> data,
+    ) async {
+      data['updatedAt'] = FieldValue.serverTimestamp();
+
+      await _db
+          .collection('categories')
+          .doc(id)
+          .update(data);
+    }
+
+    static Future<void> deleteCategory(String id) async {
+    await _db
+        .collection('categories')
+        .doc(id)
+        .delete();
+  }
+
+  static Future<Category?> getCategoryById(String id) async {
+    final doc =
+        await _db.collection('categories').doc(id).get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    return Category.fromMap(
+      doc.data()!,
+      doc.id,
+    );
+  }
+
+  static Future<List<Category>> getAllCategories() async {
+    final snapshot = await _db
+        .collection('categories')
+        .orderBy('name')
+        .get();
+
+    return snapshot.docs
+        .map(
+          (doc) => Category.fromMap(
+            doc.data(),
+            doc.id,
+          ),
+        )
+        .toList();
   }
 
   // =========================================================================
