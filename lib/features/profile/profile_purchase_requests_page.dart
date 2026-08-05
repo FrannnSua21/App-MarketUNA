@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/services/transaction_service.dart';
 import 'models/profile_models.dart';
 import 'widgets/profile_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// -----------------------------------------------------------------------
 /// SOLICITUDES DE COMPRA (lado del vendedor)
@@ -113,6 +114,50 @@ class _ProfilePurchaseRequestsPageState
     }
   }
 
+
+
+// Método dentro de _ProfilePurchaseRequestsPageState:
+  Future<void> _contactBuyer(ProfileTransaction t) async {
+    // Ajusta 'counterpartPhone' según el nombre exacto de la propiedad en tu modelo ProfileTransaction
+    final phone = t.counterpartPhone ?? ''; 
+
+    if (phone.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El comprador no tiene un teléfono registrado')),
+      );
+      return;
+    }
+
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    final message = Uri.encodeComponent(
+      'Hola ${t.counterpartName}, te escribo por tu solicitud de compra para "${t.productName}".',
+    );
+
+    final whatsappUri = Uri.parse('https://wa.me/$cleanPhone?text=$message');
+
+    try {
+      if (await canLaunchUrl(whatsappUri)) {
+        await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
+      } else {
+        // Intento de llamada telefónica tradicional si WhatsApp no abre
+        final phoneUri = Uri.parse('tel:$cleanPhone');
+        if (await canLaunchUrl(phoneUri)) {
+          await launchUrl(phoneUri);
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo abrir WhatsApp ni la app de llamadas')),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al abrir el contacto: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final responsive = Responsive(context);
@@ -175,8 +220,7 @@ class _ProfilePurchaseRequestsPageState
                 vertical: AppSpacing.md,
               ),
               itemCount: requests.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(height: AppSpacing.sm),
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
               itemBuilder: (context, index) {
                 final t = requests[index];
                 final isProcessing = _processingIds.contains(t.id);
@@ -185,6 +229,7 @@ class _ProfilePurchaseRequestsPageState
                   isProcessing: isProcessing,
                   onAccept: () => _accept(t),
                   onReject: () => _reject(t),
+                  onContact: () => _contactBuyer(t), // <--- Pasamos la función de contacto
                 );
               },
             );
@@ -200,12 +245,14 @@ class _RequestTile extends StatelessWidget {
   final bool isProcessing;
   final VoidCallback onAccept;
   final VoidCallback onReject;
+  final VoidCallback onContact; 
 
   const _RequestTile({
     required this.transaction,
     required this.isProcessing,
     required this.onAccept,
     required this.onReject,
+    required this.onContact,
   });
 
   @override
@@ -259,6 +306,18 @@ class _RequestTile extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // --- BOTÓN DE CONTACTO / WHATSAPP ---
+              IconButton(
+                icon: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+                tooltip: 'Contactar al comprador',
+                onPressed: onContact,
+              ),
+
               Text(
                 'S/ ${transaction.amount.toStringAsFixed(2)}',
                 style: const TextStyle(

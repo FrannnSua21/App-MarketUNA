@@ -273,6 +273,7 @@ class ProfileTransaction {
   final String productName;
   final String productImageUrl; // NUEVO
   final String counterpartName;
+  final String? counterpartPhone;
   final double amount;
   final DateTime date;
   final TransactionStatus status;
@@ -284,6 +285,7 @@ class ProfileTransaction {
     required this.productName,
     this.productImageUrl = '', // NUEVO
     required this.counterpartName,
+    this.counterpartPhone,
     required this.amount,
     required this.date,
     required this.status,
@@ -296,15 +298,22 @@ class ProfileTransaction {
   ) {
     final isBuyer = map['buyerId'] == currentUid;
     final dateTs = map['createdAt'];
+
     return ProfileTransaction(
       id: id,
       type: isBuyer ? TransactionType.compra : TransactionType.venta,
       productId: map['productId'] as String? ?? '',
       productName: map['productTitle'] as String? ?? '',
-      productImageUrl: map['productImageUrl'] as String? ?? '', // NUEVO
+      productImageUrl: map['productImageUrl'] as String? ?? '',
       counterpartName: isBuyer
           ? (map['sellerName'] as String? ?? '')
           : (map['buyerName'] as String? ?? ''),
+          
+      // Cambiamos `data` por `map` y asignamos el teléfono según corresponda:
+      counterpartPhone: isBuyer
+          ? (map['sellerPhone'] as String? ?? map['counterpartPhone'] as String?)
+          : (map['buyerPhone'] as String? ?? map['counterpartPhone'] as String?),
+
       amount: (map['amount'] as num?)?.toDouble() ?? 0,
       date: dateTs is Timestamp ? dateTs.toDate() : DateTime.now(),
       status: TransactionStatus.values.firstWhere(

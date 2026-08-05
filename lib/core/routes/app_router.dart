@@ -4,7 +4,7 @@ import '../../features/auth/login/login_screen.dart';
 import '../../features/auth/register/register_screen.dart';
 import '../../features/auth/recover_password/recover_password_screen.dart';
 
-import '../../features/admin/admin_dashboard.dart';
+import '../../features/admin/admin_dashboard.txt';
 
 import '../../features/home/home_page.dart';
 
