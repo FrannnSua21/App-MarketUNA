@@ -435,4 +435,46 @@ class FirestoreService {
       'totalVentas': FieldValue.increment(1),
     });
   }
+
+    /// ===============================
+  /// REPORTES
+  /// ===============================
+
+  static Future<int> getTotalUsers() async {
+    final snapshot = await _db.collection('users').get();
+    return snapshot.docs.length;
+  }
+
+  static Future<int> getTotalProducts() async {
+    final snapshot = await _db.collection('products').get();
+    return snapshot.docs.length;
+  }
+
+  static Future<int> getTotalCategories() async {
+    final snapshot = await _db.collection('categories').get();
+    return snapshot.docs.length;
+  }
+
+  static Future<int> getTotalTransactions() async {
+    final snapshot = await _db.collection('transactions').get();
+    return snapshot.docs.length;
+  }
+
+  static Future<int> getActiveProducts() async {
+    final snapshot = await _db
+        .collection('products')
+        .where('status', isEqualTo: ProductStatus.activa.name)
+        .get();
+
+    return snapshot.docs.length;
+  }
+
+  static Future<int> getSoldProducts() async {
+    final snapshot = await _db
+        .collection('products')
+        .where('status', isEqualTo: ProductStatus.vendida.name)
+        .get();
+
+    return snapshot.docs.length;
+  }
 }

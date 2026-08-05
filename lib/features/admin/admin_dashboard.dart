@@ -107,7 +107,9 @@ class AdminDashboard extends StatelessWidget {
                     context,
                     Icons.bar_chart_outlined,
                     "Reportes",
-                    () {},
+                    () {
+                      context.go('/admin/reports');
+                    },
                   ),
                   _buildCard(
                     context,
