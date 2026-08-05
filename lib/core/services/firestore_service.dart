@@ -35,11 +35,12 @@ class FirestoreService {
       'lastName': lastName?.trim() ?? '',
       'email': email,
       'phone': phone ?? '',
+
       ///
       ///
-      'role' : role,
-      'active':true,
-      
+      'role': role,
+      'active': true,
+
       'avatarUrl': null,
       'bio': '',
       'address': '',
@@ -106,37 +107,21 @@ class FirestoreService {
     return _db.collection('users').doc(uid).update(data);
   }
 
-  static Future<void> updateUserStatus(
-    String uid,
-    bool active,
-  ) async {
-
-    await _db
-        .collection('users')
-        .doc(uid)
-        .update({
-          'active': active,
-        });
-
+  static Future<void> updateUserStatus(String uid, bool active) async {
+    await _db.collection('users').doc(uid).update({'active': active});
   }
 
-  static Future<void> updateUserRole(
-    String uid,
-    String role,
-  ) async {
+  static Future<void> updateUserRole(String uid, String role) async {
     print("=== CAMBIANDO ROL ===");
     print("UID: $uid");
     print("Nuevo rol: $role");
 
-    await _db.collection('users').doc(uid).update({
-      'role': role,
-    });
+    await _db.collection('users').doc(uid).update({'role': role});
 
     final doc = await _db.collection('users').doc(uid).get();
 
     print("ROL EN FIRESTORE: ${doc.data()?['role']}");
   }
-
 
   // =========================================================================
   // PRODUCTOS  ->  colección `products/{productId}`
@@ -178,9 +163,8 @@ class FirestoreService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => Product.fromMap(d.data(), d.id))
-              .toList(),
+          (snap) =>
+              snap.docs.map((d) => Product.fromMap(d.data(), d.id)).toList(),
         );
   }
 
@@ -210,6 +194,8 @@ class FirestoreService {
 
   static Future<void> changeProductStatus(String id, ProductStatus status) {
     return updateProduct(id, {'status': status.name});
+
+    
   }
 
   static Future<void> incrementProductViews(String id) {
@@ -223,16 +209,13 @@ class FirestoreService {
   }*/
 
   static Future<void> deleteProduct(String productId) async {
-    await _db
-        .collection('products')
-        .doc(productId)
-        .delete();
+    await _db.collection('products').doc(productId).delete();
   }
 
-//============================================================================
-//
-//CATEGORIES
-//============================================================================
+  //============================================================================
+  //
+  //CATEGORIES
+  //============================================================================
 
   static Stream<List<Category>> watchAllCategories() {
     return _db
@@ -241,12 +224,7 @@ class FirestoreService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(
-                (doc) => Category.fromMap(
-                  doc.data(),
-                  doc.id,
-                ),
-              )
+              .map((doc) => Category.fromMap(doc.data(), doc.id))
               .toList(),
         );
   }
@@ -260,51 +238,33 @@ class FirestoreService {
   }
 
   static Future<void> updateCategory(
-      String id,
-      Map<String, dynamic> data,
-    ) async {
-      data['updatedAt'] = FieldValue.serverTimestamp();
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    data['updatedAt'] = FieldValue.serverTimestamp();
 
-      await _db
-          .collection('categories')
-          .doc(id)
-          .update(data);
-    }
+    await _db.collection('categories').doc(id).update(data);
+  }
 
-    static Future<void> deleteCategory(String id) async {
-    await _db
-        .collection('categories')
-        .doc(id)
-        .delete();
+  static Future<void> deleteCategory(String id) async {
+    await _db.collection('categories').doc(id).delete();
   }
 
   static Future<Category?> getCategoryById(String id) async {
-    final doc =
-        await _db.collection('categories').doc(id).get();
+    final doc = await _db.collection('categories').doc(id).get();
 
     if (!doc.exists) {
       return null;
     }
 
-    return Category.fromMap(
-      doc.data()!,
-      doc.id,
-    );
+    return Category.fromMap(doc.data()!, doc.id);
   }
 
   static Future<List<Category>> getAllCategories() async {
-    final snapshot = await _db
-        .collection('categories')
-        .orderBy('name')
-        .get();
+    final snapshot = await _db.collection('categories').orderBy('name').get();
 
     return snapshot.docs
-        .map(
-          (doc) => Category.fromMap(
-            doc.data(),
-            doc.id,
-          ),
-        )
+        .map((doc) => Category.fromMap(doc.data(), doc.id))
         .toList();
   }
 
@@ -436,7 +396,7 @@ class FirestoreService {
     });
   }
 
-    /// ===============================
+  /// ===============================
   /// REPORTES
   /// ===============================
 
@@ -476,5 +436,93 @@ class FirestoreService {
         .get();
 
     return snapshot.docs.length;
+  }
+
+  // =========================================================================
+  // FAVORITOS  ->  subcolección `users/{uid}/favorites/{productId}`
+  // =========================================================================
+
+  static Stream<bool> watchIsFavorite(String uid, String productId) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .doc(productId)
+        .snapshots()
+        .map((snap) => snap.exists);
+  }
+
+  static Future<bool> isFavorite(String uid, String productId) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .doc(productId)
+        .get();
+    return doc.exists;
+  }
+
+  static Future<void> toggleFavorite({
+    required String uid,
+    required String productId,
+  }) async {
+    final favRef = _db
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .doc(productId);
+    final userRef = _db.collection('users').doc(uid);
+
+    await _db.runTransaction((tx) async {
+      final favSnap = await tx.get(favRef);
+      if (favSnap.exists) {
+        tx.delete(favRef);
+        tx.update(userRef, {'favoritesCount': FieldValue.increment(-1)});
+      } else {
+        tx.set(favRef, {
+          'productId': productId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        tx.update(userRef, {'favoritesCount': FieldValue.increment(1)});
+      }
+    });
+  }
+
+  /// Productos favoritos del usuario, para la pantalla /favorites.
+  static Stream<List<Product>> watchUserFavorites(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .asyncMap((snap) async {
+          if (snap.docs.isEmpty) return <Product>[];
+
+          final ids = snap.docs.map((d) => d.id).toList();
+          final chunks = <List<String>>[];
+          for (var i = 0; i < ids.length; i += 30) {
+            chunks.add(
+              ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30),
+            );
+          }
+
+          final products = <Product>[];
+          for (final chunk in chunks) {
+            final qs = await _db
+                .collection('products')
+                .where(FieldPath.documentId, whereIn: chunk)
+                .get();
+            products.addAll(
+              qs.docs.map((d) => Product.fromMap(d.data(), d.id)),
+            );
+          }
+
+          final order = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+          products.sort(
+            (a, b) => (order[a.id] ?? 0).compareTo(order[b.id] ?? 0),
+          );
+          return products;
+        });
   }
 }

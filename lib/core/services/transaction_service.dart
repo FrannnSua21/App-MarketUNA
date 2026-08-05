@@ -42,7 +42,36 @@ class TransactionService {
     return snap.docs.isNotEmpty;
   }
 
-/// Escucha en vivo la ÚLTIMA solicitud de compra que este comprador
+  /// Todas las transacciones donde el usuario es COMPRADOR (solicitudes
+  /// que ÉL envió a distintos vendedores), sin importar el estado
+  /// (enProceso, completado o cancelado), para que vea el historial
+  /// completo de lo que ha pedido.
+  static Stream<List<ProfileTransaction>> watchMyOutgoingRequests(
+    String buyerId,
+  ) {
+    return _transactions
+        .where('buyerId', isEqualTo: buyerId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) {
+          return snap.docs
+              .map(
+                (doc) =>
+                    ProfileTransaction.fromMap(doc.data(), doc.id, buyerId),
+              )
+              .toList();
+        });
+  }
+
+  /// El COMPRADOR cancela su propia solicitud mientras sigue "enProceso".
+  static Future<void> cancelMyRequest(String transactionId) async {
+    await _transactions.doc(transactionId).update({
+      'status': TransactionStatus.cancelado.name,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Escucha en vivo la ÚLTIMA solicitud de compra que este comprador
   /// hizo sobre este producto (o null si nunca pidió). A diferencia de
   /// hasPendingRequest (que es una consulta de una sola vez), esto se
   /// actualiza solo en la UI cuando el vendedor acepta o rechaza, sin
@@ -168,7 +197,6 @@ class TransactionService {
     });
   }
 
-
   static Stream<List<AdminTransaction>> watchAllTransactions() {
     return FirebaseFirestore.instance
         .collection('transactions')
@@ -176,12 +204,7 @@ class TransactionService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(
-                (doc) => AdminTransaction.fromMap(
-                  doc.data(),
-                  doc.id,
-                ),
-              )
+              .map((doc) => AdminTransaction.fromMap(doc.data(), doc.id))
               .toList(),
         );
   }

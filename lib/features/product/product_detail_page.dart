@@ -10,6 +10,10 @@ import '../profile/models/profile_models.dart';
 import 'models/product.dart';
 import 'widgets/product_card.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
+import 'widgets/product_reviews_section.dart';
+
 class ProductDetailPage extends StatefulWidget {
   final String productId;
   final bool isAdminView;
@@ -27,16 +31,13 @@ class ProductDetailPage extends StatefulWidget {
 class _ProductDetailPageState extends State<ProductDetailPage> {
   final PageController _pageController = PageController();
   int _currentImage = 0;
-  bool _isFavorite = false;
   bool _isLoading = true;
   Product? _product;
 
   bool _isBuying = false;
 
-  // CAMBIO: antes era "bool _alreadyRequested = false" con un chequeo
-  // de una sola vez. Ahora es un stream cacheado aquí, se arma una vez
-  // en _loadProduct() y el StreamBuilder del build() se encarga de
-  // reaccionar en vivo cuando el vendedor acepta/rechaza.
+  Stream<bool>? _favoriteStream;
+
   Stream<ProfileTransaction?>? _myRequestStream;
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
@@ -58,10 +59,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       FirestoreService.incrementProductViews(product.id);
 
       final uid = _uid;
+
+      if (uid != null) {
+        setState(() {
+          _favoriteStream = FirestoreService.watchIsFavorite(uid, product.id);
+        });
+      }
+
       if (uid != null && uid != product.sellerId) {
-        // CAMBIO: ya no hacemos un "await hasPendingRequest(...)" de una
-        // sola vez. Solo armamos el stream; el StreamBuilder en build()
-        // hace la primera lectura Y sigue escuchando cambios después.
         setState(() {
           _myRequestStream = TransactionService.watchMyLatestRequest(
             productId: product.id,
@@ -72,10 +77,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
+  Future<void> _toggleFavorite(String productId) async {
+    final uid = _uid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inicia sesión para guardar favoritos')),
+      );
+      return;
+    }
+    try {
+      await FirestoreService.toggleFavorite(uid: uid, productId: productId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo actualizar favoritos: $e')),
+      );
+    }
+  }
+
   Future<String> _fetchBuyerName(String uid) async {
     try {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
       if (!doc.exists || doc.data() == null) return 'Usuario';
       final profile = UserProfile.fromMap(doc.data()!, uid);
       return profile.name.trim().isNotEmpty ? profile.name : 'Usuario';
@@ -97,9 +122,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         buyerId: uid,
         buyerName: buyerName,
       );
-      // CAMBIO: ya no hace falta "setState(_alreadyRequested = true)".
-      // En cuanto el documento se crea en Firestore, el stream del
-      // StreamBuilder lo detecta solo y el botón se actualiza.
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Solicitud enviada al vendedor')),
@@ -111,6 +133,178 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
     } finally {
       if (mounted) setState(() => _isBuying = false);
+    }
+  }
+
+  // ==========================================================================
+  // Modal "Escribir al WhatsApp" + redirección con el número
+  // del vendedor ya registrado.
+  // ==========================================================================
+
+  Future<void> _openWhatsAppModal() async {
+    final product = _product;
+    if (product == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.chat,
+                        color: Color(0xFF25D366),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    const Expanded(
+                      child: Text(
+                        'Escribir al WhatsApp',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Se abrirá WhatsApp para chatear con ${product.seller.name} '
+                  'sobre "${product.title}".',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _contactSeller(product);
+                    },
+                    icon: const Icon(Icons.chat, size: 18, color: Colors.white),
+                    label: const Text(
+                      'Ir a WhatsApp',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _contactSeller(Product product) async {
+    try {
+      final sellerProfile = await FirestoreService.getUserProfile(
+        product.sellerId,
+      );
+      final phone = sellerProfile?.phone ?? '';
+
+      if (phone.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'El vendedor no tiene un número de WhatsApp registrado',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+      final message = Uri.encodeComponent(
+        'Hola ${product.seller.name}, te escribo por tu publicación '
+        '"${product.title}" en la app.',
+      );
+
+      final whatsappAppUri = Uri.parse(
+        'whatsapp://send?phone=$cleanPhone&text=$message',
+      );
+      final whatsappWebUri = Uri.parse(
+        'https://wa.me/$cleanPhone?text=$message',
+      );
+
+      bool launched = false;
+      try {
+        launched = await launchUrl(
+          whatsappAppUri,
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (_) {
+        launched = false;
+      }
+
+      if (!launched) {
+        try {
+          launched = await launchUrl(
+            whatsappWebUri,
+            mode: LaunchMode.externalApplication,
+          );
+        } catch (_) {
+          launched = false;
+        }
+      }
+
+      if (!launched) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al abrir WhatsApp: $e')));
     }
   }
 
@@ -143,15 +337,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: _ImageCarousel(
-              imageUrls: product.imageUrls,
-              pageController: _pageController,
-              currentIndex: _currentImage,
-              onPageChanged: (index) => setState(() => _currentImage = index),
-              isFavorite: _isFavorite,
-              onBack: () => context.pop(),
-              onToggleFavorite: () =>
-                  setState(() => _isFavorite = !_isFavorite),
+            child: StreamBuilder<bool>(
+              stream: _favoriteStream,
+              builder: (context, favSnap) {
+                final isFavorite = favSnap.data ?? false;
+                return _ImageCarousel(
+                  imageUrls: product.imageUrls,
+                  pageController: _pageController,
+                  currentIndex: _currentImage,
+                  onPageChanged: (index) =>
+                      setState(() => _currentImage = index),
+                  isFavorite: isFavorite,
+                  onBack: () => context.pop(),
+                  onToggleFavorite: () => _toggleFavorite(product.id),
+                );
+              },
             ),
           ),
           SliverToBoxAdapter(
@@ -256,7 +456,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ],
                   ),
                   const Divider(height: AppSpacing.xl, color: AppColors.border),
-                  _SellerCard(seller: product.seller),
+                  _SellerCard(
+                    seller: product.seller,
+                    sellerId: product.sellerId,
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   const Text(
                     'Descripción',
@@ -276,6 +479,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       fontSize: 14,
                       height: 1.5,
                     ),
+                  ),
+                  ProductReviewsSection(
+                    // NUEVO
+                    productId: product.id,
+                    sellerId: product.sellerId,
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   const Text(
@@ -328,10 +536,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ],
       ),
-      // CAMBIO: para el comprador, ahora envolvemos _BuyerActionsBar en
-      // un StreamBuilder que escucha _myRequestStream. Cada vez que el
-      // vendedor acepta o rechaza (o el comprador crea una solicitud
-      // nueva), este builder se re-ejecuta solo, sin recargar la página.
       bottomNavigationBar: isOwner
           ? _OwnerActionsBar(
               onEdit: () => context.push('/product/${product.id}/edit'),
@@ -348,9 +552,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   isSold: product.status == ProductStatus.vendida,
                   alreadyRequested: alreadyRequested,
                   isProcessing: _isBuying,
-                  onMessage: () {
-                    // TODO: abre el chat con el vendedor.
-                  },
+                  onMessage: _openWhatsAppModal,
                   onBuy: _handleBuy,
                 );
               },
@@ -522,7 +724,8 @@ class _CircleIconButton extends StatelessWidget {
 
 class _SellerCard extends StatelessWidget {
   final SellerInfo seller;
-  const _SellerCard({required this.seller});
+  final String sellerId;
+  const _SellerCard({required this.seller, required this.sellerId});
 
   @override
   Widget build(BuildContext context) {
@@ -592,9 +795,16 @@ class _SellerCard extends StatelessWidget {
             ),
           ),
           OutlinedButton(
-            onPressed: () {
-              // TODO: navega al perfil público del vendedor.
-            },
+            onPressed: sellerId.isEmpty
+                ? null
+                : () {
+                    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+                    if (currentUid != null && currentUid == sellerId) {
+                      context.push('/profile');
+                    } else {
+                      context.push('/seller/$sellerId');
+                    }
+                  },
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),
@@ -674,8 +884,9 @@ class _BuyerActionsBar extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: canBuy ? onBuy : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      isSold ? AppColors.textSecondary : AppColors.primary,
+                  backgroundColor: isSold
+                      ? AppColors.textSecondary
+                      : AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),

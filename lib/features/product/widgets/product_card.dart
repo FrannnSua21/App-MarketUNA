@@ -1,32 +1,53 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/services/firestore_service.dart'; // ajusta la ruta real
 import '../models/product.dart';
 
 /// -----------------------------------------------------------------------
 /// TARJETA DE PRODUCTO
 /// Se usa en el Home, en el listado/buscador de productos, en favoritos,
 /// etc. Así evitamos tener el mismo diseño duplicado en cada pantalla.
+///
+/// CAMBIO: antes el corazón era un "bool _isFavorite" local que se
+/// inicializaba con product.isFavorite (que Firestore ni siquiera
+/// llenaba) y solo hacía setState. Ahora es un StatelessWidget que
+/// escucha en vivo si el usuario logueado marcó ESTE producto como
+/// favorito, y al tocarlo guarda/borra en Firestore de verdad.
 /// -----------------------------------------------------------------------
-class ProductCard extends StatefulWidget {
+class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onTap;
 
   const ProductCard({super.key, required this.product, required this.onTap});
 
-  @override
-  State<ProductCard> createState() => _ProductCardState();
-}
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
-class _ProductCardState extends State<ProductCard> {
-  late bool _isFavorite = widget.product.isFavorite;
+  Future<void> _toggleFavorite(BuildContext context) async {
+    final uid = _uid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inicia sesión para guardar favoritos')),
+      );
+      return;
+    }
+    try {
+      await FirestoreService.toggleFavorite(uid: uid, productId: product.id);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo actualizar favoritos: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final product = widget.product;
+    final uid = _uid;
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -68,23 +89,33 @@ class _ProductCardState extends State<ProductCard> {
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: GestureDetector(
-                      onTap: () => setState(() => _isFavorite = !_isFavorite),
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isFavorite ? Icons.favorite : Icons.favorite_border,
-                          size: 16,
-                          color: _isFavorite
-                              ? AppColors.error
-                              : AppColors.textSecondary,
-                        ),
-                      ),
+                    child: StreamBuilder<bool>(
+                      stream: uid == null
+                          ? null
+                          : FirestoreService.watchIsFavorite(uid, product.id),
+                      builder: (context, snap) {
+                        final isFavorite = snap.data ?? false;
+                        return GestureDetector(
+                          onTap: () => _toggleFavorite(context),
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              size: 16,
+                              color: isFavorite
+                                  ? AppColors.error
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

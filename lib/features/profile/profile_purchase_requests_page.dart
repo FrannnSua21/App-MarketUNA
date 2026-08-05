@@ -1,20 +1,22 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/services/transaction_service.dart';
+import '../../core/services/firestore_service.dart';
 import 'models/profile_models.dart';
 import 'widgets/profile_widgets.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// -----------------------------------------------------------------------
 /// SOLICITUDES DE COMPRA (lado del vendedor)
 ///
 /// Muestra las transacciones con status "enProceso" donde el usuario
 /// logueado es el vendedor. Desde aquí puede Aceptar (marca el producto
-/// como vendido y cancela las demás solicitudes de ese producto) o
-/// Rechazar (solo esa solicitud puntual).
+/// como vendido y cancela las demás solicitudes de ese producto),
+/// Rechazar (solo esa solicitud puntual) o Contactar al comprador por
+/// WhatsApp usando el teléfono real registrado en su perfil.
 /// -----------------------------------------------------------------------
 class ProfilePurchaseRequestsPage extends StatefulWidget {
   const ProfilePurchaseRequestsPage({super.key});
@@ -30,6 +32,7 @@ class _ProfilePurchaseRequestsPageState
   Stream<List<ProfileTransaction>>? _requestsStream;
 
   final Set<String> _processingIds = {};
+  final Set<String> _contactingIds = {};
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -114,47 +117,197 @@ class _ProfilePurchaseRequestsPageState
     }
   }
 
+  // ==========================================================================
+  // Modal "Escribir al WhatsApp" + redirección al número real del
+  // comprador (se consulta en vivo su perfil, no un campo guardado en
+  // la transacción, así siempre está actualizado).
+  // ==========================================================================
 
+  Future<void> _openWhatsAppModal(ProfileTransaction t) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.chat,
+                        color: Color(0xFF25D366),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    const Expanded(
+                      child: Text(
+                        'Escribir al WhatsApp',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Se abrirá WhatsApp para chatear con ${t.counterpartName} '
+                  'sobre "${t.productName}".',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _contactBuyer(t);
+                    },
+                    icon: const Icon(Icons.chat, size: 18, color: Colors.white),
+                    label: const Text(
+                      'Ir a WhatsApp',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-// Método dentro de _ProfilePurchaseRequestsPageState:
   Future<void> _contactBuyer(ProfileTransaction t) async {
-    // Ajusta 'counterpartPhone' según el nombre exacto de la propiedad en tu modelo ProfileTransaction
-    final phone = t.counterpartPhone ?? ''; 
-
-    if (phone.trim().isEmpty) {
+    if (t.counterpartId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El comprador no tiene un teléfono registrado')),
+        const SnackBar(content: Text('No se pudo identificar al comprador')),
       );
       return;
     }
 
-    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    final message = Uri.encodeComponent(
-      'Hola ${t.counterpartName}, te escribo por tu solicitud de compra para "${t.productName}".',
-    );
-
-    final whatsappUri = Uri.parse('https://wa.me/$cleanPhone?text=$message');
-
+    setState(() => _contactingIds.add(t.id));
     try {
-      if (await canLaunchUrl(whatsappUri)) {
-        await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
-      } else {
-        // Intento de llamada telefónica tradicional si WhatsApp no abre
-        final phoneUri = Uri.parse('tel:$cleanPhone');
-        if (await canLaunchUrl(phoneUri)) {
-          await launchUrl(phoneUri);
-        } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo abrir WhatsApp ni la app de llamadas')),
+      // Consultamos el teléfono real y actualizado del comprador,
+      // en vez de depender de un campo guardado en la transacción.
+      final buyerProfile = await FirestoreService.getUserProfile(
+        t.counterpartId,
+      );
+      final phone = buyerProfile?.phone ?? t.counterpartPhone ?? '';
+
+      if (phone.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'El comprador no tiene un número de WhatsApp registrado',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+      final message = Uri.encodeComponent(
+        'Hola ${t.counterpartName}, te escribo por tu solicitud de compra '
+        'para "${t.productName}".',
+      );
+
+      final whatsappAppUri = Uri.parse(
+        'whatsapp://send?phone=$cleanPhone&text=$message',
+      );
+      final whatsappWebUri = Uri.parse(
+        'https://wa.me/$cleanPhone?text=$message',
+      );
+
+      bool launched = false;
+      try {
+        launched = await launchUrl(
+          whatsappAppUri,
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (_) {
+        launched = false;
+      }
+
+      if (!launched) {
+        try {
+          launched = await launchUrl(
+            whatsappWebUri,
+            mode: LaunchMode.externalApplication,
           );
+        } catch (_) {
+          launched = false;
         }
+      }
+
+      if (!launched) {
+        // Último recurso: intento de llamada telefónica tradicional.
+        final phoneUri = Uri.parse('tel:$cleanPhone');
+        try {
+          launched = await launchUrl(phoneUri);
+        } catch (_) {
+          launched = false;
+        }
+      }
+
+      if (!launched) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo abrir WhatsApp ni la app de llamadas'),
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al abrir el contacto: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al abrir el contacto: $e')));
+    } finally {
+      if (mounted) setState(() => _contactingIds.remove(t.id));
     }
   }
 
@@ -224,12 +377,14 @@ class _ProfilePurchaseRequestsPageState
               itemBuilder: (context, index) {
                 final t = requests[index];
                 final isProcessing = _processingIds.contains(t.id);
+                final isContacting = _contactingIds.contains(t.id);
                 return _RequestTile(
                   transaction: t,
                   isProcessing: isProcessing,
+                  isContacting: isContacting,
                   onAccept: () => _accept(t),
                   onReject: () => _reject(t),
-                  onContact: () => _contactBuyer(t), // <--- Pasamos la función de contacto
+                  onContact: () => _openWhatsAppModal(t),
                 );
               },
             );
@@ -243,13 +398,15 @@ class _ProfilePurchaseRequestsPageState
 class _RequestTile extends StatelessWidget {
   final ProfileTransaction transaction;
   final bool isProcessing;
+  final bool isContacting;
   final VoidCallback onAccept;
   final VoidCallback onReject;
-  final VoidCallback onContact; 
+  final VoidCallback onContact;
 
   const _RequestTile({
     required this.transaction,
     required this.isProcessing,
+    required this.isContacting,
     required this.onAccept,
     required this.onReject,
     required this.onContact,
@@ -263,19 +420,27 @@ class _RequestTile extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
                 child: transaction.productImageUrl.isNotEmpty
                     ? Image.network(
                         transaction.productImageUrl,
-                        width: 48,
-                        height: 48,
+                        width: 52,
+                        height: 52,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => _fallbackIcon(),
                       )
@@ -293,40 +458,105 @@ class _RequestTile extends StatelessWidget {
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 13.5,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Comprador: ${transaction.counterpartName}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline,
+                          size: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            transaction.counterpartName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-
-              // --- BOTÓN DE CONTACTO / WHATSAPP ---
-              IconButton(
-                icon: const Icon(
-                  Icons.chat_bubble_outline_rounded,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-                tooltip: 'Contactar al comprador',
-                onPressed: onContact,
-              ),
-
+              const SizedBox(width: AppSpacing.sm),
               Text(
                 'S/ ${transaction.amount.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 13.5,
+                  fontSize: 14,
+                  color: AppColors.primary,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // ---- Botón de contacto por WhatsApp, estilo tarjeta ----
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: isContacting ? null : onContact,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.chat_bubble_rounded,
+                      size: 17,
+                      color: Color(0xFF25D366),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Contactar por WhatsApp',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF128C41),
+                        ),
+                      ),
+                    ),
+                    if (isContacting)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF25D366),
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 12,
+                        color: Color(0xFF25D366),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -382,8 +612,8 @@ class _RequestTile extends StatelessWidget {
 
   Widget _fallbackIcon() {
     return Container(
-      width: 48,
-      height: 48,
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppRadius.sm),

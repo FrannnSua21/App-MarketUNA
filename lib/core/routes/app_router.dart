@@ -8,7 +8,6 @@ import '../../features/admin/admin_dashboard.txt';
 
 import '../../features/home/home_page.dart';
 
-
 import '../../features/profile/profile_page.dart';
 import '../../features/profile/profile_edit_page.dart';
 import '../../features/profile/profile_listings_page.dart';
@@ -34,6 +33,11 @@ import '../../features/admin/reports_page.dart';
 import '../../features/admin/statistics_page.dart';
 import '../../features/admin/settings_page.dart';
 
+import '../../features/profile/seller_profile_page.dart';
+import '../../features/profile/profile_my_requests_page.dart';
+
+import '../../features/favorites/favorites_page.dart';
+
 final GoRouter router = GoRouter(
   //initialLocation: '/login',
   initialLocation: '/login',
@@ -48,22 +52,21 @@ final GoRouter router = GoRouter(
       path: '/recover-password',
       builder: (context, state) => const RecoverPasswordScreen(),
     ),
-    
-    
-    // -----ADMIN-----
-    GoRoute(path: '/admin', builder: (_, __) => const AdminDashboard(),),
 
-    GoRoute(path: '/admin/users',builder: (context, state) => const UsersPage(),),
+    // -----ADMIN-----
+    GoRoute(path: '/admin', builder: (_, __) => const AdminDashboard()),
+
+    GoRoute(
+      path: '/admin/users',
+      builder: (context, state) => const UsersPage(),
+    ),
 
     GoRoute(
       path: '/admin/user',
       builder: (context, state) {
-
         final user = state.extra as UserProfile;
 
-        return UserDetailPage(
-          user: user,
-        );
+        return UserDetailPage(user: user);
       },
     ),
 
@@ -98,7 +101,6 @@ final GoRouter router = GoRouter(
       path: '/admin/settings',
       builder: (context, state) => const SettingsPage(),
     ),
-
 
     // ---- Feature "profile" ----
     GoRoute(path: '/profile', builder: (context, state) => const ProfilePage()),
@@ -160,8 +162,21 @@ final GoRouter router = GoRouter(
       builder: (context, state) => const MigrationPage(),
     ),
     GoRoute(
-    path: '/profile/purchase-requests',
-    builder: (context, state) => const ProfilePurchaseRequestsPage(),
+      path: '/profile/purchase-requests',
+      builder: (context, state) => const ProfilePurchaseRequestsPage(),
+    ),
+    GoRoute(
+      path: '/seller/:id',
+      builder: (context, state) =>
+          SellerProfilePage(userId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/profile/my-requests',
+      builder: (context, state) => const ProfileMyRequestsPage(),
+    ),
+    GoRoute(
+      path: '/favorites',
+      builder: (context, state) => const FavoritesPage(),
     ),
   ],
 );

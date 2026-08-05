@@ -181,6 +181,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ],
                       ),
+
                       const SizedBox(height: AppSpacing.lg),
                       const SectionLabel('Configuración'),
                       const SizedBox(height: AppSpacing.sm),

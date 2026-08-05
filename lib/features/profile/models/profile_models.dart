@@ -271,7 +271,8 @@ class ProfileTransaction {
   final TransactionType type;
   final String productId;
   final String productName;
-  final String productImageUrl; // NUEVO
+  final String productImageUrl;
+  final String counterpartId; // NUEVO
   final String counterpartName;
   final String? counterpartPhone;
   final double amount;
@@ -283,7 +284,8 @@ class ProfileTransaction {
     required this.type,
     this.productId = '',
     required this.productName,
-    this.productImageUrl = '', // NUEVO
+    this.productImageUrl = '',
+    this.counterpartId = '', // NUEVO
     required this.counterpartName,
     this.counterpartPhone,
     required this.amount,
@@ -305,15 +307,18 @@ class ProfileTransaction {
       productId: map['productId'] as String? ?? '',
       productName: map['productTitle'] as String? ?? '',
       productImageUrl: map['productImageUrl'] as String? ?? '',
+      counterpartId:
+          isBuyer // NUEVO
+          ? (map['sellerId'] as String? ?? '')
+          : (map['buyerId'] as String? ?? ''),
       counterpartName: isBuyer
           ? (map['sellerName'] as String? ?? '')
           : (map['buyerName'] as String? ?? ''),
-          
-      // Cambiamos `data` por `map` y asignamos el teléfono según corresponda:
       counterpartPhone: isBuyer
-          ? (map['sellerPhone'] as String? ?? map['counterpartPhone'] as String?)
-          : (map['buyerPhone'] as String? ?? map['counterpartPhone'] as String?),
-
+          ? (map['sellerPhone'] as String? ??
+                map['counterpartPhone'] as String?)
+          : (map['buyerPhone'] as String? ??
+                map['counterpartPhone'] as String?),
       amount: (map['amount'] as num?)?.toDouble() ?? 0,
       date: dateTs is Timestamp ? dateTs.toDate() : DateTime.now(),
       status: TransactionStatus.values.firstWhere(
