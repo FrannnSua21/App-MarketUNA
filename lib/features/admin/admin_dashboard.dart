@@ -96,6 +96,16 @@ class AdminDashboard extends StatelessWidget {
                           ],
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                        tooltip: "Editar Perfil",
+                        onPressed: () {
+                          context.push(
+                            '/profile/edit',
+                            extra: auth.profile, // Pasamos el perfil del usuario actual como argumento
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
