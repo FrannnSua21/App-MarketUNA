@@ -31,6 +31,8 @@ import '../../features/admin/products_page.dart';
 import '../../features/admin/categories_page.dart';
 import '../../features/admin/transactions_page.dart';
 import '../../features/admin/reports_page.dart';
+import '../../features/admin/statistics_page.dart';
+import '../../features/admin/settings_page.dart';
 
 final GoRouter router = GoRouter(
   //initialLocation: '/login',
@@ -85,6 +87,16 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/admin/transactions',
       builder: (context, state) => const TransactionsPage(),
+    ),
+
+    GoRoute(
+      path: '/admin/statistics',
+      builder: (context, state) => const StatisticsPage(),
+    ),
+
+    GoRoute(
+      path: '/admin/settings',
+      builder: (context, state) => const SettingsPage(),
     ),
 
 

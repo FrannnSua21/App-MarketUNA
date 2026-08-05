@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../auth/providers/auth_provider.dart';
 import '../../core/theme/app_theme.dart';
-import 'package:go_router/go_router.dart';
-import 'transactions_page.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -11,208 +10,161 @@ class AdminDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final firstName = auth.profile?.firstName ?? "Admin";
+    final lastName = auth.profile?.lastName ?? "";
+    final fullName = "$firstName $lastName".trim();
+    final initials = (firstName.isNotEmpty ? firstName[0] : "A") +
+        (lastName.isNotEmpty ? lastName[0] : "");
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Panel de Administración"),
         centerTitle: true,
+        elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// Bienvenida
-            Text(
-              "Bienvenido",
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              "${auth.profile?.firstName ?? ""} ${auth.profile?.lastName ?? ""}",
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 5),
-
-            Text(
-              auth.currentEmail ?? "",
-              style: const TextStyle(
-                fontSize: 15,
-                color: Colors.grey,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                //color: AppColors.primary.withOpacity(0.15),
-                color: AppColors.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                auth.role.toUpperCase(),
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- SECCIÓN PERFIL / BIENVENIDA ---
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: AppColors.primary,
+                        child: Text(
+                          initials.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "¡Hola, $firstName!",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              auth.currentEmail ?? "Sin correo registrado",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                (auth.role).toUpperCase(),
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 30),
+              const SizedBox(height: 24),
 
-            Expanded(
-              child: GridView.count(
+              Text(
+                "Gestión Principal",
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // --- GRID DE MÓDULOS ---
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
-                crossAxisSpacing: 18,
-                mainAxisSpacing: 18,
-                childAspectRatio: 1.05,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1.1,
                 children: [
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.people_alt_outlined,
-                    "Usuarios",
-                    () {
-                      context.go('/admin/users');
-                    },
+                    icon: Icons.people_alt_outlined,
+                    title: "Usuarios",
+                    route: '/admin/users',
                   ),
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.shopping_bag_outlined,
-                    "Productos",
-                    () {
-                      context.push('/admin/products');
-                    },
+                    icon: Icons.shopping_bag_outlined,
+                    title: "Productos",
+                    route: '/admin/products',
                   ),
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.receipt_long_outlined,
-                    "Transacciones",
-                    () {
-                      context.go('/admin/transactions');
-                    },
+                    icon: Icons.receipt_long_outlined,
+                    title: "Transacciones",
+                    route: '/admin/transactions',
                   ),
-
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.bar_chart_outlined,
-                    "Reportes",
-                    () {
-                      context.go('/admin/reports');
-                    },
+                    icon: Icons.bar_chart_outlined,
+                    title: "Reportes",
+                    route: '/admin/reports',
                   ),
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.category_outlined,
-                    "Categorías",
-                    () {
-                      context.go('/admin/categories');
-                    },
+                    icon: Icons.category_outlined,
+                    title: "Categorías",
+                    route: '/admin/categories',
                   ),
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.analytics_outlined,
-                    "Estadísticas",
-                    () {},
+                    icon: Icons.analytics_outlined,
+                    title: "Estadísticas",
+                    route: '/admin/statistics',
                   ),
-                  _buildCard(
+                  _buildMenuCard(
                     context,
-                    Icons.settings_outlined,
-                    "Configuración",
-                    () {},
+                    icon: Icons.settings_outlined,
+                    title: "Configuración",
+                    route: '/admin/settings',
                   ),
                 ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _adminCard(
-    BuildContext context,
-    IconData icon,
-    String title,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-
-            Icon(
-              icon,
-              size: 50,
-              color: Colors.blue,
-            ),
-
-            const SizedBox(height: 15),
-
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCard(
-    BuildContext context,
-    IconData icon,
-    String title,
-    VoidCallback onTap,
-  ) {
-    return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      color: AppColors.primary,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: Colors.white,
-                size: 45,
-              ),
-              const SizedBox(height: 15),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
-                ),
               ),
             ],
           ),
@@ -221,4 +173,61 @@ class AdminDashboard extends StatelessWidget {
     );
   }
 
+  Widget _buildMenuCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String route,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.push(route),
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.grey.shade200,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: AppColors.primary,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
