@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../features/product/models/product.dart';
 import '../../features/profile/models/profile_models.dart';
+import '../../features/admin/models/admin_transaction.dart';
 
 /// -----------------------------------------------------------------------
 /// TransactionService
@@ -41,7 +42,6 @@ class TransactionService {
     return snap.docs.isNotEmpty;
   }
 
-
 /// Escucha en vivo la ÚLTIMA solicitud de compra que este comprador
   /// hizo sobre este producto (o null si nunca pidió). A diferencia de
   /// hasPendingRequest (que es una consulta de una sola vez), esto se
@@ -63,8 +63,6 @@ class TransactionService {
           return ProfileTransaction.fromMap(doc.data(), doc.id, buyerId);
         });
   }
-
-
 
   /// Crea la solicitud de compra ("enProceso"). No modifica el producto:
   /// sigue visible para que otros compradores también puedan pedirlo.
@@ -168,5 +166,30 @@ class TransactionService {
       'status': TransactionStatus.cancelado.name,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+
+  static Stream<List<AdminTransaction>> watchAllTransactions() {
+    return FirebaseFirestore.instance
+        .collection('transactions')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => AdminTransaction.fromMap(
+                  doc.data(),
+                  doc.id,
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  static Future<void> deleteTransaction(String id) async {
+    await FirebaseFirestore.instance
+        .collection('transactions')
+        .doc(id)
+        .delete();
   }
 }

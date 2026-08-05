@@ -29,6 +29,7 @@ import '../../features/admin/user_page.dart';
 import '../../features/admin/user_detail_page.dart';
 import '../../features/admin/products_page.dart';
 import '../../features/admin/categories_page.dart';
+import '../../features/admin/transactions_page.dart';
 
 
 final GoRouter router = GoRouter(
@@ -75,6 +76,11 @@ final GoRouter router = GoRouter(
     ),
 
     GoRoute(path: '/home', builder: (context, state) => const HomePage()),
+
+    GoRoute(
+      path: '/admin/transactions',
+      builder: (context, state) => const TransactionsPage(),
+    ),
 
 
     // ---- Feature "profile" ----

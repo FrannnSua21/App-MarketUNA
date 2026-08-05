@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../auth/providers/auth_provider.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
+import 'transactions_page.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -93,6 +94,15 @@ class AdminDashboard extends StatelessWidget {
                       context.push('/admin/products');
                     },
                   ),
+                  _buildCard(
+                    context,
+                    Icons.receipt_long_outlined,
+                    "Transacciones",
+                    () {
+                      context.go('/admin/transactions');
+                    },
+                  ),
+
                   _buildCard(
                     context,
                     Icons.bar_chart_outlined,
